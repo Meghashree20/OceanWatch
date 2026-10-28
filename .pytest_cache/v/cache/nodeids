@@ -1,0 +1,5 @@
+[
+  "frontend/tests/test_api_client.py::test_client_converts_timeout_and_connection_errors",
+  "frontend/tests/test_api_client.py::test_client_exposes_backend_error_message",
+  "frontend/tests/test_api_client.py::test_client_uses_backend_url_and_removes_empty_filters"
+]
