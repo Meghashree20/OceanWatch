@@ -330,6 +330,8 @@ function HotspotMap({
   loading: boolean;
   error: string | null;
 }) {
+  const [hoveredCluster, setHoveredCluster] = useState<ClusterData | null>(null);
+
   return (
     <Card className="overflow-hidden">
       <CardHeader>
@@ -342,6 +344,11 @@ function HotspotMap({
             <Badge variant="neutral">{loading ? 'Loading' : error ? 'Unavailable' : `${clusters.length} clusters`}</Badge>
           </div>
           <div className="flex items-center gap-1.5">
+            {selectedCluster && (
+              <Button variant="ghost" size="sm" className="px-2 text-xs" onClick={() => onSelectCluster(null)}>
+                Reset
+              </Button>
+            )}
             <Button variant="ghost" size="sm" className="px-2">
               <Download className="h-3.5 w-3.5" />
             </Button>
@@ -392,6 +399,8 @@ function HotspotMap({
                 key={cluster.id}
                 type="button"
                 onClick={() => onSelectCluster(isSelected ? null : cluster)}
+                onMouseEnter={() => setHoveredCluster(cluster)}
+                onMouseLeave={() => setHoveredCluster(null)}
                 className="absolute -translate-x-1/2 -translate-y-1/2 cursor-pointer transition-transform duration-200 hover:scale-105 focus-visible:scale-105"
                 style={{
                   left: `${cluster.x}%`,
@@ -425,6 +434,18 @@ function HotspotMap({
               </button>
             );
           })}
+
+          {hoveredCluster && (
+            <div className="pointer-events-none absolute right-4 top-4 z-10 w-56 rounded-lg border border-cyan-500/40 bg-navy-950/90 p-3 text-xs text-white shadow-xl backdrop-blur-sm">
+              <p className="font-semibold text-cyan-300">Cluster {hoveredCluster.id} · {hoveredCluster.label}</p>
+              <dl className="mt-2 grid grid-cols-2 gap-x-3 gap-y-1 text-[11px] text-ocean-200">
+                <dt>Observations</dt><dd className="text-right font-mono">{hoveredCluster.observations.toLocaleString()}</dd>
+                <dt>Average</dt><dd className="text-right font-mono">{hoveredCluster.avgConcentration.toFixed(3)}</dd>
+                <dt>Maximum</dt><dd className="text-right font-mono">{hoveredCluster.maxConcentration.toFixed(3)}</dd>
+                <dt>Coordinates</dt><dd className="text-right font-mono">{hoveredCluster.centerLat.toFixed(2)}, {hoveredCluster.centerLon.toFixed(2)}</dd>
+              </dl>
+            </div>
+          )}
 
           {/* Observation points are not exposed by the hotspot list endpoint. */}
           {points.map((point, i) => {

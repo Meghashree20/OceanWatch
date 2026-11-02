@@ -10,7 +10,7 @@ import {
   Sparkles,
   TrendingUp,
 } from 'lucide-react';
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { PageHeader } from '@/components/layout/PageShell';
 import { Badge } from '@/components/ui/Badge';
 import { Card, CardBody, CardHeader } from '@/components/ui/Card';
@@ -228,32 +228,128 @@ function metricValue(metrics: Record<string, unknown> | null | undefined, label:
 }
 
 function ForecastChart({ forecast, error }: { forecast: Forecast | null; error: string | null }) {
-  const points = [...(forecast?.historical_values ?? []), ...(forecast?.predicted_values ?? [])];
-  const maxValue = Math.max(...points.map((point) => point.value), 0);
-  const minValue = Math.min(...points.map((point) => point.value), 0);
+  const allPoints = useMemo(() => [
+    ...(forecast?.historical_values ?? []).map((point) => ({ ...point, series: 'historical' as const })),
+    ...(forecast?.predicted_values ?? []).map((point) => ({ ...point, series: 'predicted' as const })),
+  ], [forecast]);
+  const [rangePreset, setRangePreset] = useState<'ALL' | 'RECENT_HALF' | 'RECENT_QUARTER'>('ALL');
+  const [startIndex, setStartIndex] = useState(0);
+  const [endIndex, setEndIndex] = useState(Math.max(allPoints.length - 1, 0));
+  const [showHistorical, setShowHistorical] = useState(true);
+  const [showPredicted, setShowPredicted] = useState(true);
+  const [hoveredPoint, setHoveredPoint] = useState<number | null>(null);
+  const [selectedPoint, setSelectedPoint] = useState<number | null>(null);
+
+  useEffect(() => {
+    setRangePreset('ALL');
+    setStartIndex(0);
+    setEndIndex(Math.max(allPoints.length - 1, 0));
+    setHoveredPoint(null);
+    setSelectedPoint(null);
+    setShowHistorical(true);
+    setShowPredicted(true);
+  }, [allPoints.length]);
+
+  const visiblePoints = useMemo(() => {
+    if (!allPoints.length) return [];
+    return allPoints.slice(
+      Math.max(0, Math.min(startIndex, allPoints.length - 1)),
+      Math.min(allPoints.length, Math.max(startIndex + 1, endIndex + 1)),
+    );
+  }, [allPoints, startIndex, endIndex]);
+  const maxValue = Math.max(...visiblePoints.map((point) => point.value), 0);
+  const minValue = Math.min(...visiblePoints.map((point) => point.value), 0);
   const valueRange = maxValue - minValue || 1;
-  const toPoint = (point: { date: string; value: number }, index: number) => {
-    const x = points.length === 1 ? 50 : (index / (points.length - 1)) * 100;
+  const toPoint = (point: typeof allPoints[number], index: number) => {
+    const x = visiblePoints.length === 1 ? 50 : (index / (visiblePoints.length - 1)) * 100;
     const y = 92 - ((point.value - minValue) / valueRange) * 78;
     return `${x},${y}`;
   };
-  const historicalCount = forecast?.historical_values.length ?? 0;
-  const historicalPath = forecast?.historical_values.map((point, index) => toPoint(point, index)).join(' ') ?? '';
-  const predictedPath = forecast?.predicted_values.map((point, index) => toPoint(point, historicalCount + index)).join(' ') ?? '';
+  const historicalPath = visiblePoints.filter((point) => point.series === 'historical').map((point) => toPoint(point, visiblePoints.indexOf(point))).join(' ');
+  const predictedPath = visiblePoints.filter((point) => point.series === 'predicted').map((point) => toPoint(point, visiblePoints.indexOf(point))).join(' ');
+  const hovered = hoveredPoint === null ? null : visiblePoints[hoveredPoint] ?? null;
+  const selected = selectedPoint === null ? null : visiblePoints[selectedPoint] ?? null;
+  const reset = () => {
+    setRangePreset('ALL');
+    setStartIndex(0);
+    setEndIndex(Math.max(allPoints.length - 1, 0));
+    setHoveredPoint(null);
+    setSelectedPoint(null);
+    setShowHistorical(true);
+    setShowPredicted(true);
+  };
+  const setRange = (preset: typeof rangePreset) => {
+    setRangePreset(preset);
+    const total = allPoints.length;
+    const start = preset === 'RECENT_HALF' ? Math.floor(total * 0.5) : preset === 'RECENT_QUARTER' ? Math.floor(total * 0.75) : 0;
+    setStartIndex(start);
+    setEndIndex(Math.max(total - 1, 0));
+  };
+  const zoom = (direction: 'in' | 'out') => {
+    if (!allPoints.length) return;
+    const span = endIndex - startIndex;
+    if (direction === 'in' && span > 3) {
+      const delta = Math.max(1, Math.floor(span * 0.2));
+      setStartIndex((value) => Math.min(value + delta, endIndex - 3));
+      setEndIndex((value) => Math.max(value - delta, startIndex + 3));
+    } else if (direction === 'out') {
+      const delta = Math.max(1, Math.floor(span * 0.25));
+      setStartIndex((value) => Math.max(0, value - delta));
+      setEndIndex((value) => Math.min(allPoints.length - 1, value + delta));
+    }
+    setRangePreset('ALL');
+  };
 
   return (
-    <div className="relative h-[18rem] overflow-hidden rounded-xl border border-ocean-200 bg-ocean-50 p-4 sm:h-[22rem]">
+    <div className="relative overflow-hidden rounded-xl border border-ocean-200 bg-ocean-50 p-4 sm:h-[25rem]">
       <div className="absolute inset-0 grid-pattern opacity-60" />
-      <div className="absolute inset-x-4 top-4 flex justify-between text-[10px] font-medium uppercase tracking-wider text-ocean-400">
+      <div className="relative z-10 flex flex-wrap items-center justify-between gap-2 text-[10px] font-medium uppercase tracking-wider text-ocean-400">
         <span>{forecast ? 'Historical period' : 'Forecast unavailable'}</span>
         <span>{forecast ? 'Forecast horizon' : ''}</span>
       </div>
-      <svg className="absolute inset-x-0 bottom-10 h-[68%] w-full" viewBox="0 0 100 100" preserveAspectRatio="none" aria-label="Historical and predicted pollution values">
-        {forecast && <><polyline points={historicalPath} fill="none" stroke="#2d5868" strokeWidth="1.5" vectorEffect="non-scaling-stroke" /><polyline points={predictedPath} fill="none" stroke="#06b6d4" strokeWidth="1.5" strokeDasharray="4 3" vectorEffect="non-scaling-stroke" /></>}
+      {forecast && (
+        <div className="relative z-10 mt-2 flex flex-wrap items-center justify-between gap-2">
+          <div className="flex flex-wrap gap-1.5">
+            {([
+              ['ALL', 'All'],
+              ['RECENT_HALF', 'Recent 50%'],
+              ['RECENT_QUARTER', 'Recent 25%'],
+            ] as const).map(([preset, label]) => (
+              <button key={preset} type="button" onClick={() => setRange(preset)} className={`rounded border px-2 py-1 text-[10px] font-semibold ${rangePreset === preset ? 'border-cyan-500 bg-cyan-100 text-cyan-900' : 'border-ocean-200 bg-white/80 text-ocean-600 hover:bg-white'}`}>
+                {label}
+              </button>
+            ))}
+            <button type="button" onClick={() => zoom('in')} disabled={endIndex - startIndex <= 3} className="rounded border border-ocean-200 bg-white/80 px-2 py-1 text-[10px] font-semibold text-ocean-600 hover:bg-white disabled:opacity-40">Zoom +</button>
+            <button type="button" onClick={() => zoom('out')} disabled={startIndex === 0 && endIndex === allPoints.length - 1} className="rounded border border-ocean-200 bg-white/80 px-2 py-1 text-[10px] font-semibold text-ocean-600 hover:bg-white disabled:opacity-40">Zoom −</button>
+            <button type="button" onClick={reset} className="rounded border border-ocean-200 bg-white/80 px-2 py-1 text-[10px] font-semibold text-ocean-600 hover:bg-white">Reset</button>
+          </div>
+          <span className="font-mono normal-case">{visiblePoints.length} points</span>
+        </div>
+      )}
+      <svg className="relative z-0 mt-2 h-52 w-full sm:h-60" viewBox="0 0 100 100" preserveAspectRatio="none" aria-label="Historical and predicted pollution values" onMouseLeave={() => setHoveredPoint(null)}>
+        {forecast && <>
+          {showHistorical && <polyline points={historicalPath} fill="none" stroke="#2d5868" strokeWidth="1.5" vectorEffect="non-scaling-stroke" />}
+          {showPredicted && <polyline points={predictedPath} fill="none" stroke="#06b6d4" strokeWidth="1.5" strokeDasharray="4 3" vectorEffect="non-scaling-stroke" />}
+          {visiblePoints.map((point, index) => {
+            const [x, y] = toPoint(point, index).split(',');
+            const isVisible = point.series === 'historical' ? showHistorical : showPredicted;
+            if (!isVisible) return null;
+            return <g key={`${point.series}-${point.date}-${index}`}><circle cx={x} cy={y} r={selectedPoint === index ? 3 : hoveredPoint === index ? 2.5 : 1.5} fill={point.series === 'historical' ? '#2d5868' : '#06b6d4'} stroke="white" strokeWidth="0.8" vectorEffect="non-scaling-stroke" /><rect x={Number(x) - 4} y="5" width="8" height="90" fill="transparent" className="cursor-pointer" onMouseEnter={() => setHoveredPoint(index)} onClick={() => setSelectedPoint(index)} /></g>;
+          })}
+        </>}
       </svg>
-      <div className="absolute bottom-4 left-4 flex flex-wrap gap-4 text-[11px] text-ocean-600">
-        {forecast && <><span className="flex items-center gap-1.5"><span className="h-1.5 w-5 rounded-full bg-ocean-700" />Actual pollution</span><span className="flex items-center gap-1.5"><span className="h-1.5 w-5 rounded-full border-t-2 border-dashed border-cyan-500" />Predicted pollution</span></>}
-      </div>
+      {forecast && (
+        <div className="relative z-10 flex flex-wrap gap-2 text-[11px] text-ocean-600">
+          <button type="button" onClick={() => setShowHistorical((value) => !value)} className={`flex items-center gap-1.5 rounded px-1.5 py-1 ${showHistorical ? '' : 'opacity-40 line-through'}`}><span className="h-1.5 w-5 rounded-full bg-ocean-700" />Actual pollution</button>
+          <button type="button" onClick={() => setShowPredicted((value) => !value)} className={`flex items-center gap-1.5 rounded px-1.5 py-1 ${showPredicted ? '' : 'opacity-40 line-through'}`}><span className="h-1.5 w-5 rounded-full border-t-2 border-dashed border-cyan-500" />Predicted pollution</button>
+        </div>
+      )}
+      {(hovered || selected) && (
+        <div className="relative z-10 mt-2 rounded-lg border border-navy-700 bg-navy-950 px-3 py-2 text-xs text-white shadow-lg">
+          <div className="flex items-center justify-between gap-4"><span className="font-semibold">{(selected ?? hovered)?.series === 'historical' ? 'Actual pollution' : 'Predicted pollution'}</span><span className="font-mono text-cyan-300">{(selected ?? hovered)?.date}</span></div>
+          <p className="mt-1 font-mono text-ocean-200">{(selected ?? hovered)?.value.toFixed(3)} pieces/m³</p>
+        </div>
+      )}
       {!forecast && <span className="absolute left-1/2 top-1/2 max-w-sm -translate-x-1/2 rounded-lg border border-white bg-white/90 px-3 py-2 text-center text-xs font-medium text-ocean-600 shadow-card">{error ?? 'Forecast data is not currently available from the backend.'}</span>}
     </div>
   );

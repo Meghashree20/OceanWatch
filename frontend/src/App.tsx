@@ -7,6 +7,7 @@ import { PriorityPage } from '@/pages/PriorityPage';
 import { DataExplorerPage } from '@/pages/DataExplorerPage';
 import { IntelligencePage } from '@/pages/IntelligencePage';
 import { PlatformPage, type PlatformPageConfig } from '@/pages/PlatformPage';
+import { DashboardFiltersProvider } from '@/lib/dashboardFilters';
 
 const pageConfigs: Record<string, PlatformPageConfig> = {
   explore: {
@@ -57,8 +58,9 @@ const pageConfigs: Record<string, PlatformPageConfig> = {
 function App() {
   return (
     <BrowserRouter>
-      <PageShell>
-        <Routes>
+      <DashboardFiltersProvider>
+        <PageShell>
+          <Routes>
           <Route path="/" element={<HomePage />} />
           <Route path="/hotspots" element={<HotspotsPage />} />
           <Route path="/forecast" element={<ForecastPage />} />
@@ -71,8 +73,9 @@ function App() {
               <Route key={slug} path={`/${slug}`} element={<PlatformPage config={config} />} />
             ))}
           <Route path="*" element={<Navigate to="/" replace />} />
-        </Routes>
-      </PageShell>
+          </Routes>
+        </PageShell>
+      </DashboardFiltersProvider>
     </BrowserRouter>
   );
 }

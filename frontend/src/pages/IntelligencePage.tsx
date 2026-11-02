@@ -40,24 +40,11 @@ import {
   type PollutionObservation,
   type Recommendation,
 } from '@/lib/api/client';
+import { useDashboardFilters, type DashboardFilters } from '@/lib/dashboardFilters';
 
 // -----------------------------------------------------------------------------
 // Shared Filter Definitions & Constants (Verified against MongoDB schema)
 // -----------------------------------------------------------------------------
-export interface DashboardFilters {
-  ocean: string;
-  region: string;
-  startDate: string;
-  endDate: string;
-}
-
-const DEFAULT_FILTERS: DashboardFilters = {
-  ocean: 'ALL',
-  region: 'ALL',
-  startDate: '',
-  endDate: '',
-};
-
 const OCEAN_OPTIONS = [
   'ALL',
   'Pacific Ocean',
@@ -65,23 +52,6 @@ const OCEAN_OPTIONS = [
   'Indian Ocean',
   'Arctic Ocean',
   'Southern Ocean',
-];
-
-const REGION_OPTIONS = [
-  'ALL',
-  'Mediterranean Sea',
-  'North Sea',
-  'Caribbean Sea',
-  'Baltic Sea',
-  'East China Sea',
-  'South China Sea',
-  'Bay of Bengal',
-  'Arabian Sea',
-  'Philippine Sea',
-  'Bering Sea',
-  'Coral Sea',
-  'Tasman Sea',
-  'Gulf of America (formerly Gulf of Mexico)',
 ];
 
 const DATE_PRESETS = [
@@ -93,7 +63,7 @@ const DATE_PRESETS = [
 
 export function IntelligencePage() {
   // Shared Filter State
-  const [filters, setFilters] = useState<DashboardFilters>(DEFAULT_FILTERS);
+  const { filters, setFilters, resetFilters } = useDashboardFilters();
 
   // Data States
   const [observations, setObservations] = useState<PollutionObservation[]>([]);
@@ -107,12 +77,21 @@ export function IntelligencePage() {
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
   const [globalResetKey, setGlobalResetKey] = useState<number>(0);
+  const [availableRegions, setAvailableRegions] = useState<string[]>([]);
 
   // Load Unfiltered Summary Baseline on Mount
   useEffect(() => {
     oceanWatchApi
       .getSummaryStatistics()
       .then((dataStats) => setTotalUnfilteredObs(dataStats.total_observations))
+      .catch(() => null);
+  }, []);
+
+  useEffect(() => {
+    oceanWatchApi.getObservations({ limit: 1000 })
+      .then((response) => setAvailableRegions(
+        [...new Set(response.data.map((observation) => observation.region).filter((value): value is string => Boolean(value)))].sort()
+      ))
       .catch(() => null);
   }, []);
 
@@ -160,22 +139,7 @@ export function IntelligencePage() {
         setHotspots(hotspotResponse.data);
         setHotspotStats(statsResponse);
 
-        // Filter recommendations in-memory by ocean/region if specified
-        let filteredRecs = recResponse.data;
-        if (currentFilters.ocean !== 'ALL') {
-          filteredRecs = filteredRecs.filter(
-            (r) =>
-              (r.cluster?.ocean as string)?.toUpperCase() === currentFilters.ocean.toUpperCase() ||
-              (r.cluster?.region as string)?.toUpperCase() === currentFilters.ocean.toUpperCase()
-          );
-        }
-        if (currentFilters.region !== 'ALL') {
-          filteredRecs = filteredRecs.filter(
-            (r) =>
-              (r.cluster?.region as string)?.toUpperCase() === currentFilters.region.toUpperCase()
-          );
-        }
-        setRecommendations(filteredRecs);
+        setRecommendations(recResponse.data);
         setLoading(false);
       })
       .catch((err: Error) => {
@@ -191,7 +155,7 @@ export function IntelligencePage() {
 
   // Reset Filters Handler
   const handleResetFilters = () => {
-    setFilters(DEFAULT_FILTERS);
+    resetFilters();
     setGlobalResetKey((prev) => prev + 1);
   };
 
@@ -274,6 +238,7 @@ export function IntelligencePage() {
           onReset={handleResetFilters}
           activeCount={activeFilterCount}
           totalMatchingRecords={filteredCount}
+          availableRegions={availableRegions}
         />
 
         {error && (
@@ -386,12 +351,14 @@ function SharedDashboardFilterBar({
   onReset,
   activeCount,
   totalMatchingRecords,
+  availableRegions,
 }: {
   filters: DashboardFilters;
   onChange: React.Dispatch<React.SetStateAction<DashboardFilters>>;
   onReset: () => void;
   activeCount: number;
   totalMatchingRecords: number | null;
+  availableRegions: string[];
 }) {
   const [collapsed, setCollapsed] = useState<boolean>(false);
 
@@ -495,7 +462,7 @@ function SharedDashboardFilterBar({
                   className="w-full appearance-none rounded-xl border border-ocean-200 bg-white px-3.5 py-2 pr-9 text-xs font-medium text-navy-950 shadow-xs focus:border-cyan-500 focus:outline-none focus:ring-1 focus:ring-cyan-500"
                 >
                   <option value="ALL">All Marine Regions</option>
-                  {REGION_OPTIONS.filter((r) => r !== 'ALL').map((region) => (
+                  {availableRegions.map((region) => (
                     <option key={region} value={region}>
                       {region}
                     </option>
@@ -567,7 +534,8 @@ function SharedDashboardFilterBar({
             <div className="flex items-center gap-1 text-[11px] text-ocean-500">
               <Info className="h-3.5 w-3.5 text-ocean-400 shrink-0" />
               <span>
-                Region &amp; dates filter live MongoDB observations. Hotspot clustering mirrors detection run bounds.
+                Region &amp; dates filter live MongoDB observations. Hotspot lists support region, but the current
+                list API does not support date filters; hotspot statistics and recommendations remain unfiltered.
               </span>
             </div>
           </div>

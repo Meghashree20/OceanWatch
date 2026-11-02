@@ -23,6 +23,7 @@ import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
 import { Card, CardBody, CardHeader } from '@/components/ui/Card';
 import { oceanWatchApi, type PollutionObservation } from '@/lib/api/client';
+import { useDashboardFilters } from '@/lib/dashboardFilters';
 
 const columns = [
   'Observation ID',
@@ -49,6 +50,7 @@ const visualizations = [
 ];
 
 export function DataExplorerPage() {
+  const { filters, setFilters, resetFilters } = useDashboardFilters();
   const [columnMenuOpen, setColumnMenuOpen] = useState(false);
   const [visibleColumns, setVisibleColumns] = useState(columns);
   const [observations, setObservations] = useState<PollutionObservation[]>([]);
@@ -57,13 +59,31 @@ export function DataExplorerPage() {
   const [search, setSearch] = useState('');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [availableRegions, setAvailableRegions] = useState<string[]>([]);
+  const [availableOceans, setAvailableOceans] = useState<string[]>([]);
   const pageSize = 25;
+
+  useEffect(() => {
+    oceanWatchApi.getObservations({ limit: 1000 })
+      .then((response) => {
+        setAvailableRegions([...new Set(response.data.map((observation) => observation.region).filter((value): value is string => Boolean(value)))].sort());
+        setAvailableOceans([...new Set(response.data.map((observation) => observation.ocean).filter((value): value is string => Boolean(value)))].sort());
+      })
+      .catch(() => null);
+  }, []);
 
   useEffect(() => {
     let active = true;
     setLoading(true);
     setError(null);
-    oceanWatchApi.getObservations({ skip: page * pageSize, limit: pageSize })
+    oceanWatchApi.getObservations({
+      skip: page * pageSize,
+      limit: pageSize,
+      region: filters.region !== 'ALL' ? filters.region : undefined,
+      ocean: filters.ocean !== 'ALL' ? filters.ocean : undefined,
+      start_date: filters.startDate || undefined,
+      end_date: filters.endDate || undefined,
+    })
       .then((response) => {
         if (!active) return;
         setObservations(response.data);
@@ -76,7 +96,11 @@ export function DataExplorerPage() {
         if (active) setLoading(false);
       });
     return () => { active = false; };
-  }, [page]);
+  }, [page, filters]);
+
+  useEffect(() => {
+    setPage(0);
+  }, [filters]);
 
   const filteredObservations = observations.filter((observation) => {
     const query = search.trim().toLowerCase();
@@ -114,22 +138,14 @@ export function DataExplorerPage() {
                 <p className="mt-2 text-sm text-ocean-300">Refine the observation query before records are requested from the API.</p>
               </div>
               <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3 xl:flex-1 xl:pl-8">
-                {filterFields.map(({ label, value, type, icon: Icon }) => (
-                  <label key={label} className="block">
-                    <span className="mb-1.5 block text-[11px] font-medium text-ocean-300">{label}</span>
-                    <span className="relative block">
-                      <Icon className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-cyan-300" />
-                      {type === 'date' ? (
-                        <input type="date" aria-label={label} className="w-full rounded-lg border border-navy-700 bg-navy-900 px-3 py-2.5 pl-9 text-sm text-white outline-none focus:border-cyan-400 focus:ring-2 focus:ring-cyan-400/30" />
-                      ) : (
-                        <select defaultValue={value} aria-label={label} className="w-full appearance-none rounded-lg border border-navy-700 bg-navy-900 py-2.5 pl-9 pr-9 text-sm text-white outline-none focus:border-cyan-400 focus:ring-2 focus:ring-cyan-400/30">
-                          <option>{value}</option>
-                        </select>
-                      )}
-                      {type === 'select' && <ChevronDown className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-ocean-400" />}
-                    </span>
-                  </label>
-                ))}
+                <label className="block"><span className="mb-1.5 block text-[11px] font-medium text-ocean-300">Date from</span><input type="date" value={filters.startDate} onChange={(event) => setFilters((current) => ({ ...current, startDate: event.target.value }))} className="w-full rounded-lg border border-navy-700 bg-navy-900 px-3 py-2.5 text-sm text-white outline-none focus:border-cyan-400 focus:ring-2 focus:ring-cyan-400/30" /></label>
+                <label className="block"><span className="mb-1.5 block text-[11px] font-medium text-ocean-300">Date to</span><input type="date" value={filters.endDate} onChange={(event) => setFilters((current) => ({ ...current, endDate: event.target.value }))} className="w-full rounded-lg border border-navy-700 bg-navy-900 px-3 py-2.5 text-sm text-white outline-none focus:border-cyan-400 focus:ring-2 focus:ring-cyan-400/30" /></label>
+                <label className="block"><span className="mb-1.5 block text-[11px] font-medium text-ocean-300">Region</span><select value={filters.region} onChange={(event) => setFilters((current) => ({ ...current, region: event.target.value }))} className="w-full rounded-lg border border-navy-700 bg-navy-900 px-3 py-2.5 text-sm text-white outline-none focus:border-cyan-400"><option value="ALL">All regions</option>{availableRegions.map((region) => <option key={region} value={region}>{region}</option>)}</select></label>
+                <label className="block"><span className="mb-1.5 block text-[11px] font-medium text-ocean-300">Ocean</span><select value={filters.ocean} onChange={(event) => setFilters((current) => ({ ...current, ocean: event.target.value }))} className="w-full rounded-lg border border-navy-700 bg-navy-900 px-3 py-2.5 text-sm text-white outline-none focus:border-cyan-400"><option value="ALL">All oceans</option>{availableOceans.map((ocean) => <option key={ocean} value={ocean}>{ocean}</option>)}</select></label>
+              </div>
+              <div className="mt-4 flex items-center justify-between border-t border-navy-800 pt-3">
+                <span className="text-xs text-ocean-400">Filters apply to observation requests and the table.</span>
+                {(filters.region !== 'ALL' || filters.ocean !== 'ALL' || filters.startDate || filters.endDate) && <Button variant="ghost" size="sm" onClick={resetFilters} className="text-cyan-300 hover:bg-navy-900">Clear filters</Button>}
               </div>
             </div>
           </CardBody>
