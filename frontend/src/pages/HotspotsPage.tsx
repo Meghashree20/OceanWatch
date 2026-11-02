@@ -24,8 +24,9 @@ import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
 import { Card, CardBody, CardHeader } from '@/components/ui/Card';
 import { SectionHeader } from '@/components/ui/SectionHeader';
+import { PollutionMap } from '@/components/PollutionMap';
 import { cn } from '@/lib/utils';
-import { oceanWatchApi, type Hotspot } from '@/lib/api/client';
+import { oceanWatchApi, type Hotspot, type PollutionObservation } from '@/lib/api/client';
 import { useDashboardFilters, type DashboardFilters } from '@/lib/dashboardFilters';
 
 /* ------------------------------------------------------------------ */
@@ -103,6 +104,8 @@ export function HotspotsPage() {
   const { filters, setFilters, resetFilters } = useDashboardFilters();
   const [selectedCluster, setSelectedCluster] = useState<ClusterData | null>(null);
   const [clusters, setClusters] = useState<ClusterData[]>([]);
+  const [hotspots, setHotspots] = useState<Hotspot[]>([]);
+  const [observations, setObservations] = useState<PollutionObservation[]>([]);
   const [totalClusters, setTotalClusters] = useState(0);
   const [availableRegions, setAvailableRegions] = useState<string[]>([]);
   const [availableOceans, setAvailableOceans] = useState<string[]>([]);
@@ -111,15 +114,21 @@ export function HotspotsPage() {
 
   useEffect(() => {
     let active = true;
-    oceanWatchApi.getAllObservations()
+    oceanWatchApi.getAllObservations({
+      region: filters.region !== 'ALL' ? filters.region : undefined,
+      ocean: filters.ocean !== 'ALL' ? filters.ocean : undefined,
+      start_date: filters.startDate || undefined,
+      end_date: filters.endDate || undefined,
+    })
       .then(({ data }) => {
         if (!active) return;
+        setObservations(data);
         setAvailableRegions([...new Set(data.map((observation) => observation.region).filter((value): value is string => Boolean(value)))].sort());
         setAvailableOceans([...new Set(data.map((observation) => observation.ocean).filter((value): value is string => Boolean(value)))].sort());
       })
       .catch(() => null);
     return () => { active = false; };
-  }, []);
+  }, [filters.endDate, filters.ocean, filters.region, filters.startDate]);
 
   useEffect(() => {
     let active = true;
@@ -133,6 +142,7 @@ export function HotspotsPage() {
     })
       .then((hotspotResponse) => {
         if (!active) return;
+        setHotspots(hotspotResponse.data);
         setClusters(toClusterData(hotspotResponse.data));
         setTotalClusters(hotspotResponse.total);
       })
@@ -210,9 +220,11 @@ export function HotspotsPage() {
 
         {/* Map + cluster details */}
         <div className="mt-8 grid gap-6 lg:grid-cols-[1fr_22rem]">
-          <HotspotMap
+          <RealHotspotMap
             clusters={clusters}
-            points={[]}
+            hotspots={hotspots}
+            observations={observations}
+            setFilters={setFilters}
             loading={loading}
             error={error}
             selectedCluster={selectedCluster}
@@ -341,7 +353,71 @@ function SummaryStat({
 /* Hotspot map                                                          */
 /* ------------------------------------------------------------------ */
 
-function HotspotMap({
+function RealHotspotMap({
+  clusters,
+  hotspots,
+  observations,
+  setFilters,
+  selectedCluster,
+  onSelectCluster,
+  loading,
+  error,
+}: {
+  clusters: ClusterData[];
+  hotspots: Hotspot[];
+  observations: PollutionObservation[];
+  setFilters: React.Dispatch<React.SetStateAction<DashboardFilters>>;
+  selectedCluster: ClusterData | null;
+  onSelectCluster: (cluster: ClusterData | null) => void;
+  loading: boolean;
+  error: string | null;
+}) {
+  return (
+    <Card className="overflow-hidden">
+      <CardHeader>
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2.5">
+            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-ocean-100 text-ocean-700">
+              <ScatterChart className="h-4 w-4" />
+            </div>
+            <h3 className="text-sm font-bold text-navy-950">Pollution map</h3>
+            <Badge variant="neutral">{loading ? 'Loading' : error ? 'Unavailable' : `${observations.length} observations · ${hotspots.length} hotspots`}</Badge>
+          </div>
+          {selectedCluster && <Button variant="ghost" size="sm" className="px-2 text-xs" onClick={() => onSelectCluster(null)}>Reset</Button>}
+        </div>
+      </CardHeader>
+      <CardBody className="p-0">
+        {loading ? (
+          <div className="flex min-h-[30rem] items-center justify-center bg-ocean-50 text-sm text-ocean-500">Loading geographic data…</div>
+        ) : error ? (
+          <div className="flex min-h-[30rem] items-center justify-center bg-ocean-50 px-6 text-center text-sm text-red-700">{error}</div>
+        ) : observations.length === 0 && hotspots.length === 0 ? (
+          <div className="flex min-h-[30rem] flex-col items-center justify-center bg-ocean-50 px-6 text-center">
+            <MapPin className="h-8 w-8 text-ocean-300" />
+            <p className="mt-3 text-sm font-semibold text-navy-800">No geographic data available</p>
+            <p className="mt-1 max-w-md text-xs text-ocean-500">There are no observations or detected hotspots for the selected filters.</p>
+          </div>
+        ) : (
+          <PollutionMap
+            observations={observations}
+            hotspots={hotspots}
+            selectedHotspotId={selectedCluster?.id ?? null}
+            onSelectHotspot={(hotspot) => {
+              const cluster = clusters.find((item) => item.id === String(hotspot.cluster_id));
+              if (cluster) {
+                onSelectCluster(cluster);
+                const region = hotspot.region ?? hotspot.dominant_region;
+                if (region) setFilters((current) => ({ ...current, region }));
+              }
+            }}
+          />
+        )}
+      </CardBody>
+    </Card>
+  );
+}
+
+export function HotspotMap({
   clusters,
   points,
   selectedCluster,
@@ -610,13 +686,13 @@ function ClusterDetailsPanel({
             <DetailRow
               icon={Activity}
               label="Avg concentration"
-              value={`${cluster.avgConcentration.toFixed(2)} mg/m³`}
+              value={`${cluster.avgConcentration.toFixed(2)} pieces/m³`}
               mono
             />
             <DetailRow
               icon={Gauge}
               label="Max concentration"
-              value={`${cluster.maxConcentration.toFixed(1)} mg/m³`}
+              value={`${cluster.maxConcentration.toFixed(1)} pieces/m³`}
               mono
             />
             <DetailRow icon={CalendarRange} label="Date range" value={cluster.dateRange} />
