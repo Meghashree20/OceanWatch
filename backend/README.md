@@ -7,7 +7,7 @@ priority recommendations.
 ## Architecture
 
 ```text
-Streamlit frontend
+React frontend
 	|
 	v
 FastAPI REST API

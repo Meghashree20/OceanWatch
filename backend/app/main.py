@@ -8,7 +8,8 @@ from app.core.config import settings
 from app.core.logging_config import logger
 from app.db.mongodb import connect_to_mongo, close_mongo_connection
 from app.db.indexes import create_indexes
-from app.routes import health, data, hotspots, forecast, recommendations
+from app.routes import health, data, hotspots, forecast, recommendations, satellite
+from app.services.satellite_service import SatelliteService
 
 
 OPENAPI_TAGS = [
@@ -17,15 +18,20 @@ OPENAPI_TAGS = [
     {"name": "Hotspots", "description": "Pollution hotspot detection and cluster queries."},
     {"name": "Forecasting", "description": "Model-based pollution concentration forecasts."},
     {"name": "Recommendations", "description": "Transparent cleanup priority recommendations."},
+    {"name": "Satellite", "description": "Sentinel-2 MARIDA U-Net coastal debris segmentation."},
 ]
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # Startup
+    # Startup: connect to MongoDB, create indexes, and load U-Net ONCE
     await connect_to_mongo()
     await create_indexes()
+    try:
+        SatelliteService.initialize()
+    except Exception as exc:
+        logger.warning(f"Satellite U-Net initialization deferred or failed: {exc}")
     yield
-    # Shutdown
+    # Shutdown: close MongoDB connection
     await close_mongo_connection()
 
 app = FastAPI(
@@ -47,7 +53,7 @@ if settings.BACKEND_CORS_ORIGINS:
         allow_headers=["*"],
     )
 
-# Global exception handler
+# Global exception handlers
 @app.exception_handler(HTTPException)
 async def http_exception_handler(request: Request, exc: HTTPException):
     return JSONResponse(
@@ -73,9 +79,28 @@ async def global_exception_handler(request: Request, exc: Exception):
         content={"error": {"code": "internal_server_error", "message": "Internal server error"}}
     )
 
+# Root status endpoint
+@app.get("/", summary="Root service status", tags=["System"])
+async def root():
+    return {
+        "status": "healthy",
+        "service": settings.PROJECT_NAME,
+        "message": "OceanWatch marine pollution monitoring API is running",
+        "version": "1.0.0",
+    }
+
+# Root-level health endpoint alias
+@app.get("/health", summary="Check API health", tags=["System"])
+async def root_health():
+    return {
+        "status": "healthy",
+        "service": settings.PROJECT_NAME,
+    }
+
 # Routers
 app.include_router(health.router, prefix="/api", tags=["System"])
 app.include_router(data.router, prefix="/api/data", tags=["Data"])
 app.include_router(hotspots.router, prefix="/api/hotspots", tags=["Hotspots"])
 app.include_router(forecast.router, prefix="/api/forecast", tags=["Forecasting"])
 app.include_router(recommendations.router, prefix="/api/recommendations", tags=["Recommendations"])
+app.include_router(satellite.router, prefix="/api/satellite", tags=["Satellite"])

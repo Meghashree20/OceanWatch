@@ -27,6 +27,8 @@ class ForecastResponse(BaseModel):
 
     zone: str
     horizon: int
+    metric: str = "microplastic_concentration"
+    unit: str = "pieces/m3"
     historical_values: List[Dict[str, Any]]
     predicted_values: List[Dict[str, Any]]
     forecast_dates: List[str]

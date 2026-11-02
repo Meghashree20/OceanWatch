@@ -2,7 +2,7 @@
 
 from dataclasses import dataclass
 from math import log1p
-from typing import Any, Dict, Optional
+from typing import Any, Dict, Optional, Sequence
 
 
 DEFAULT_WEIGHTS = {
@@ -11,6 +11,7 @@ DEFAULT_WEIGHTS = {
     "human_exposure": 0.20,
     "cleanup_feasibility": 0.15,
 }
+TREND_ADJUSTMENT_WEIGHT = 0.25
 ACTION_BY_LEVEL = {
     "LOW": "Monitor",
     "MEDIUM": "Schedule further assessment",
@@ -18,6 +19,50 @@ ACTION_BY_LEVEL = {
     "CRITICAL": "Immediate cleanup assessment",
 }
 CONTEXT_FIELDS = ("ecological_risk", "human_exposure", "cleanup_feasibility")
+
+
+def calculate_trend_score(
+    forecast_values: Optional[Sequence[float]],
+    historical_value: Optional[float],
+) -> Dict[str, Any]:
+    """Map the relative forecast change from the latest observation to 0-100."""
+    valid_forecasts = [
+        float(value)
+        for value in (forecast_values or [])
+        if value is not None and _is_finite_number(value)
+    ]
+    if historical_value is None or not _is_finite_number(historical_value) or not valid_forecasts:
+        return {
+            "score": 50.0,
+            "source": "neutral fallback: valid historical value and forecast are required",
+            "relative_change": None,
+        }
+
+    baseline = float(historical_value)
+    forecast_mean = sum(valid_forecasts) / len(valid_forecasts)
+    if baseline <= 0:
+        if baseline == 0 and forecast_mean > 0:
+            relative_change = 1.0
+        elif baseline == 0 and forecast_mean < 0:
+            relative_change = -1.0
+        else:
+            relative_change = 0.0
+    else:
+        relative_change = (forecast_mean - baseline) / baseline
+
+    score = round(min(100.0, max(0.0, 50.0 + 50.0 * relative_change)), 2)
+    return {
+        "score": score,
+        "source": "mean forecast value compared with latest historical value",
+        "relative_change": round(relative_change, 6),
+    }
+
+
+def _is_finite_number(value: Any) -> bool:
+    try:
+        return bool(float("-inf") < float(value) < float("inf"))
+    except (TypeError, ValueError):
+        return False
 
 
 @dataclass
@@ -62,6 +107,8 @@ def score_hotspot(
     cleanup_feasibility: Optional[float] = None,
     config: Optional[RecommendationConfig] = None,
     pollution_reference: Optional[Dict[str, float]] = None,
+    forecast_values: Optional[Sequence[float]] = None,
+    historical_value: Optional[float] = None,
 ) -> Dict[str, Any]:
     """Score a hotspot without inventing external/contextual factor values."""
     config = config or RecommendationConfig()
@@ -70,8 +117,10 @@ def score_hotspot(
     reference = pollution_reference or {"min": average_pollution, "max": average_pollution}
     pollution_score = normalize_pollution_score(average_pollution, reference["min"], reference["max"])
     density = min(100.0, max(0.0, float(hotspot.get("observation_count", 0)) / config.density_reference_count * 100))
+    trend = calculate_trend_score(forecast_values, historical_value)
     factor_scores = {
         "pollution_severity": {"score": pollution_score, "source": "NOAA-derived average_pollution", "normalization": "log1p min-max across selected detection run hotspot averages"},
+        "trend_increase": {**trend, "adjustment_weight": TREND_ADJUSTMENT_WEIGHT},
         "observation_density": {"score": round(density, 2), "source": "NOAA-derived observation_count", "normalization": f"observation_count / {config.density_reference_count}, capped at 100; informational and not weighted"},
         "ecological_risk": {"score": ecological_risk, "source": "External/contextual input"},
         "human_exposure": {"score": human_exposure, "source": "External/contextual input"},
@@ -84,7 +133,7 @@ def score_hotspot(
         "factor_scores": factor_scores,
         "weights": weights,
         "missing_external_factors": missing,
-        "calculation_explanation": "Pollution uses log-scaled min-max normalization of actual average pollution values within the selected detection run. External factors are supplied by the caller and are not present in NOAA data.",
+        "calculation_explanation": "Pollution uses log-scaled min-max normalization across the selected detection run. The forecast trend adjustment is 0.25 * (trend score - 50), where trend compares mean forecast with the latest historical value; unavailable trends use neutral score 50. External factors are caller-supplied.",
     }
     if missing:
         return {
@@ -105,7 +154,9 @@ def score_hotspot(
         if not 0 <= factor_scores[name]["score"] <= 100:
             raise ValueError(f"{name} must be between 0 and 100.")
     weighted_components = {name: round(weights[name] * factor_scores[name]["score"], 2) for name in weights}
-    priority_score = round(sum(weighted_components.values()), 2)
+    baseline_score = sum(weighted_components.values())
+    trend_adjustment = TREND_ADJUSTMENT_WEIGHT * (trend["score"] - 50.0)
+    priority_score = round(min(100.0, max(0.0, baseline_score + trend_adjustment)), 2)
     priority_level = _priority_level(priority_score)
     action = ACTION_BY_LEVEL[priority_level]
     return {
@@ -116,6 +167,7 @@ def score_hotspot(
         "factor_scores": factor_scores,
         "weighted_components": weighted_components,
         "contributions": weighted_components,
+        "trend_adjustment": round(trend_adjustment, 2),
         "recommendation": action,
         "recommended_action": action,
         "missing_external_factors": [],

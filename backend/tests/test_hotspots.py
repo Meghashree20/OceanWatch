@@ -4,7 +4,13 @@ Tests for DBSCAN hotspot detection logic.
 import pytest
 import pandas as pd
 import numpy as np
+from datetime import datetime, timezone
 from app.ml.hotspot_model import DBSCANConfig, run_dbscan, _classify_severity
+from app.services.hotspot_service import (
+    classify_temporal_hotspots,
+    filter_historical_observations,
+    filter_recent_observations,
+)
 
 
 # ---------------------------------------------------------------------------
@@ -122,3 +128,82 @@ def test_dbscan_provides_required_hotspot_statistics():
     }
     assert required.issubset(stats[0])
     assert stats[0]["median_pollution"] is not None
+
+
+def test_recent_observation_filter_uses_inclusive_utc_window():
+    now = datetime(2026, 10, 30, 12, tzinfo=timezone.utc)
+    df = pd.DataFrame({
+        "unique_id": ["boundary", "recent", "old", "undated", "future"],
+        "sample_date": [
+            "2026-10-23T12:00:00Z",
+            "2026-10-30T11:00:00Z",
+            "2026-10-23T11:59:59Z",
+            None,
+            "2026-10-30T12:00:01Z",
+        ],
+    })
+
+    recent = filter_recent_observations(df, window_days=7, reference_time=now)
+
+    assert recent["unique_id"].tolist() == ["boundary", "recent"]
+    assert df["unique_id"].tolist() == ["boundary", "recent", "old", "undated", "future"]
+
+
+def test_recent_observation_filter_requires_positive_window():
+    with pytest.raises(ValueError, match="at least 1"):
+        filter_recent_observations(pd.DataFrame({"sample_date": []}), window_days=0)
+
+
+def test_historical_and_recent_filters_are_disjoint():
+    now = datetime(2026, 10, 30, 12, tzinfo=timezone.utc)
+    df = pd.DataFrame({
+        "unique_id": ["old", "boundary", "recent", "undated", "future"],
+        "sample_date": [
+            "2026-10-23T11:59:59Z",
+            "2026-10-23T12:00:00Z",
+            "2026-10-30T11:00:00Z",
+            None,
+            "2026-10-30T12:00:01Z",
+        ],
+    })
+
+    historical = filter_historical_observations(df, window_days=7, reference_time=now)
+    recent = filter_recent_observations(df, window_days=7, reference_time=now)
+
+    assert historical["unique_id"].tolist() == ["old"]
+    assert recent["unique_id"].tolist() == ["boundary", "recent"]
+    assert set(historical["unique_id"]).isdisjoint(recent["unique_id"])
+
+
+def test_temporal_hotspot_classification_matches_clusters_geographically():
+    historical_observations = pd.DataFrame({
+        "latitude": [10.0, 10.01, 10.02, 40.0, 40.01, 40.02],
+        "longitude": [20.0, 20.01, 20.02, 50.0, 50.01, 50.02],
+        "measurement": [1.0] * 6,
+        "sample_date": ["2026-09-01T00:00:00Z"] * 6,
+        "region": ["Synthetic"] * 6,
+        "ocean": ["Synthetic Ocean"] * 6,
+        "unique_id": [f"historical-{i}" for i in range(6)],
+    })
+    recent_observations = pd.DataFrame({
+        "latitude": [10.0, 10.01, 10.02, -30.0, -30.01, -30.02],
+        "longitude": [20.0, 20.01, 20.02, 120.0, 120.01, 120.02],
+        "measurement": [2.0] * 6,
+        "sample_date": ["2026-10-30T00:00:00Z"] * 6,
+        "region": ["Synthetic"] * 6,
+        "ocean": ["Synthetic Ocean"] * 6,
+        "unique_id": [f"recent-{i}" for i in range(6)],
+    })
+    config = DBSCANConfig(eps_km=5.0, min_samples=3)
+    _, historical = run_dbscan(historical_observations, config)
+    _, recent = run_dbscan(recent_observations, config)
+
+    classified = classify_temporal_hotspots(historical, recent, eps_km=5.0)
+    by_classification = {item["temporal_classification"]: item for item in classified}
+
+    assert len(classified) == 3
+    assert by_classification["persistent_emerging"]["historical_observation_count"] == 3
+    assert by_classification["persistent_emerging"]["recent_observation_count"] == 3
+    assert by_classification["emerging"]["recent_observation_count"] == 3
+    assert by_classification["persistent"]["historical_observation_count"] == 3
+    assert [item["cluster_id"] for item in classified] == [0, 1, 2]
