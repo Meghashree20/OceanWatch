@@ -12,7 +12,6 @@ import {
   Filter,
   Globe2,
   Info,
-  Layers,
   MapPin,
   Radar,
   RefreshCw,
@@ -36,7 +35,6 @@ import { Card, CardBody, CardHeader } from '@/components/ui/Card';
 import {
   oceanWatchApi,
   type Hotspot,
-  type HotspotStats,
   type PollutionObservation,
   type Recommendation,
 } from '@/lib/api/client';
@@ -70,7 +68,6 @@ export function IntelligencePage() {
   const [filteredCount, setFilteredCount] = useState<number | null>(null);
   const [hotspots, setHotspots] = useState<Hotspot[]>([]);
   const [recommendations, setRecommendations] = useState<Recommendation[]>([]);
-  const [hotspotStats, setHotspotStats] = useState<HotspotStats | null>(null);
   const [totalUnfilteredObs, setTotalUnfilteredObs] = useState<number | null>(null);
 
   // Status States
@@ -88,7 +85,7 @@ export function IntelligencePage() {
   }, []);
 
   useEffect(() => {
-    oceanWatchApi.getObservations({ limit: 1000 })
+    oceanWatchApi.getAllObservations()
       .then((response) => setAvailableRegions(
         [...new Set(response.data.map((observation) => observation.region).filter((value): value is string => Boolean(value)))].sort()
       ))
@@ -102,14 +99,11 @@ export function IntelligencePage() {
 
     // Build backend parameters supported by existing FastAPI endpoints
     const obsParams: {
-      limit: number;
       ocean?: string;
       region?: string;
       start_date?: string;
       end_date?: string;
-    } = {
-      limit: 150,
-    };
+    } = {};
 
     if (currentFilters.ocean !== 'ALL') obsParams.ocean = currentFilters.ocean;
     if (currentFilters.region !== 'ALL') obsParams.region = currentFilters.region;
@@ -128,17 +122,14 @@ export function IntelligencePage() {
     if (currentFilters.region !== 'ALL') hotspotParams.region = currentFilters.region;
 
     Promise.all([
-      oceanWatchApi.getObservations(obsParams),
+      oceanWatchApi.getAllObservations(obsParams),
       oceanWatchApi.getHotspots(hotspotParams),
-      oceanWatchApi.getHotspotStats().catch(() => null),
       oceanWatchApi.getPriorityResults(100).catch(() => ({ data: [], total: 0 })),
     ])
-      .then(([obsResponse, hotspotResponse, statsResponse, recResponse]) => {
+      .then(([obsResponse, hotspotResponse, recResponse]) => {
         setObservations(obsResponse.data);
         setFilteredCount(obsResponse.total);
         setHotspots(hotspotResponse.data);
-        setHotspotStats(statsResponse);
-
         setRecommendations(recResponse.data);
         setLoading(false);
       })
@@ -241,6 +232,17 @@ export function IntelligencePage() {
           availableRegions={availableRegions}
         />
 
+        {(filters.startDate || filters.endDate) && (
+          <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-xs leading-5 text-amber-900">
+            Date filters apply to observation-backed metrics, the trend chart, and the observation table. Hotspot overlays and recommendations are not date-scoped because their list endpoints do not accept date filters.
+          </div>
+        )}
+        {(filters.region !== 'ALL' || filters.ocean !== 'ALL') && (
+          <div className="rounded-lg border border-sky-200 bg-sky-50 px-4 py-3 text-xs leading-5 text-sky-900">
+            Hotspots are filtered by the supported region/ocean parameters. Recommendations have no region/ocean filtering parameters and remain global.
+          </div>
+        )}
+
         {error && (
           <div className="flex items-start gap-3 rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-800">
             <ShieldAlert className="mt-0.5 h-5 w-5 shrink-0 text-red-600" />
@@ -267,9 +269,9 @@ export function IntelligencePage() {
           />
           <KpiMetricCard
             label="Identified Hotspot Clusters"
-            value={hotspots.length ? hotspots.length.toLocaleString() : '—'}
+            value={hotspots.length.toLocaleString()}
             unit="DBSCAN zones"
-            detail={`${criticalClusters} critical · ${highSeverityClusters} high severity`}
+            detail={`${criticalClusters} critical · ${highSeverityClusters} high severity${filters.startDate || filters.endDate ? ' · dates not supported' : ''}`}
             icon={Radar}
             accent="cyan"
           />
@@ -287,9 +289,9 @@ export function IntelligencePage() {
           />
           <KpiMetricCard
             label="Targeted Priority Locations"
-            value={recommendations.length ? recommendations.length.toLocaleString() : '—'}
+            value={activeFilterCount === 0 ? recommendations.length.toLocaleString() : '—'}
             unit="action zones"
-            detail="Evaluated via multi-factor cleanup scoring"
+            detail={activeFilterCount === 0 ? 'Evaluated via multi-factor cleanup scoring' : 'Global results · endpoint has no shared filters'}
             icon={Target}
             accent="navy"
           />
@@ -300,7 +302,6 @@ export function IntelligencePage() {
           observations={observations}
           loading={loading}
           resetTrigger={globalResetKey}
-          hasActiveFilters={activeFilterCount > 0}
         />
 
         {/* 3. GEOGRAPHIC POLLUTION HOTSPOT MAP */}
@@ -315,17 +316,18 @@ export function IntelligencePage() {
         <div className="grid gap-6 md:grid-cols-2 xl:grid-cols-3">
           <SeverityBreakdownChart
             hotspots={hotspots}
-            stats={hotspotStats}
             resetTrigger={globalResetKey}
           />
           <RegionalPollutionChart
             observations={observations}
             hotspots={hotspots}
             resetTrigger={globalResetKey}
+            dateRangeActive={Boolean(filters.startDate || filters.endDate)}
           />
           <PriorityActionQueue
             recommendations={recommendations}
             resetTrigger={globalResetKey}
+            filtersActive={activeFilterCount > 0}
           />
         </div>
 
@@ -481,7 +483,7 @@ function SharedDashboardFilterBar({
                 <input
                   type="date"
                   min="2010-01-01"
-                  max="2024-12-31"
+                  max={filters.endDate || '2024-12-31'}
                   value={filters.startDate}
                   onChange={handleStartDateChange}
                   className="w-full rounded-xl border border-ocean-200 bg-white px-3.5 py-2 text-xs font-medium text-navy-950 shadow-xs focus:border-cyan-500 focus:outline-none focus:ring-1 focus:ring-cyan-500"
@@ -497,7 +499,7 @@ function SharedDashboardFilterBar({
               <div className="relative mt-1.5">
                 <input
                   type="date"
-                  min="2010-01-01"
+                  min={filters.startDate || '2010-01-01'}
                   max="2024-12-31"
                   value={filters.endDate}
                   onChange={handleEndDateChange}
@@ -859,12 +861,10 @@ function PrimaryTrendChart({
   observations,
   loading,
   resetTrigger,
-  hasActiveFilters,
 }: {
   observations: PollutionObservation[];
   loading: boolean;
   resetTrigger: number;
-  hasActiveFilters: boolean;
 }) {
   const sortedObs = useMemo(() => {
     return [...observations]
@@ -2054,11 +2054,9 @@ function GeographicHotspotMap({
 // -----------------------------------------------------------------------------
 function SeverityBreakdownChart({
   hotspots,
-  stats,
   resetTrigger,
 }: {
   hotspots: Hotspot[];
-  stats: HotspotStats | null;
   resetTrigger: number;
 }) {
   const [selectedSev, setSelectedSev] = useState<string | null>(null);
@@ -2172,10 +2170,12 @@ function RegionalPollutionChart({
   observations,
   hotspots,
   resetTrigger,
+  dateRangeActive,
 }: {
   observations: PollutionObservation[];
   hotspots: Hotspot[];
   resetTrigger: number;
+  dateRangeActive: boolean;
 }) {
   const [selectedRegion, setSelectedRegion] = useState<string | null>(null);
 
@@ -2195,7 +2195,7 @@ function RegionalPollutionChart({
       map[reg].max = Math.max(map[reg].max, obs.measurement);
     });
 
-    if (Object.keys(map).length === 0) {
+    if (Object.keys(map).length === 0 && !dateRangeActive) {
       hotspots.forEach((h) => {
         const reg = h.ocean || h.region;
         if (!reg) return;
@@ -2214,7 +2214,7 @@ function RegionalPollutionChart({
     }));
 
     return items.sort((a, b) => b.avg - a.avg).slice(0, 5);
-  }, [observations, hotspots]);
+  }, [observations, hotspots, dateRangeActive]);
 
   const maxAvg = regionAverages.length ? Math.max(...regionAverages.map((r) => r.avg)) : 1;
 
@@ -2309,9 +2309,11 @@ function RegionalPollutionChart({
 function PriorityActionQueue({
   recommendations,
   resetTrigger,
+  filtersActive,
 }: {
   recommendations: Recommendation[];
   resetTrigger: number;
+  filtersActive: boolean;
 }) {
   const [selectedIdx, setSelectedIdx] = useState<number | null>(null);
 
@@ -2338,7 +2340,9 @@ function PriorityActionQueue({
           <Badge variant="neutral">Score 0–100</Badge>
         </div>
         <p className="mt-1 text-xs text-ocean-600">
-          Ranked recovery zones matching filtered scope. Click card to inspect action.
+          {filtersActive
+            ? 'Global ranking. The recommendation endpoint does not accept region, ocean, or date filters.'
+            : 'Ranked recovery zones from the recommendation API. Click card to inspect action.'}
         </p>
       </CardHeader>
 

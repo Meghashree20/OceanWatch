@@ -22,6 +22,7 @@ import { Card, CardBody } from '@/components/ui/Card';
 import { SectionHeader } from '@/components/ui/SectionHeader';
 import { cn } from '@/lib/utils';
 import { oceanWatchApi, type HotspotStats, type PollutionObservation } from '@/lib/api/client';
+import { useDashboardFilters } from '@/lib/dashboardFilters';
 
 export function HomePage() {
   return (
@@ -107,12 +108,22 @@ function HeroSection() {
 function HeroVisualization() {
   const [records, setRecords] = useState<PollutionObservation[]>([]);
   const [hotspotStats, setHotspotStats] = useState<HotspotStats | null>(null);
+  const { filters } = useDashboardFilters();
 
   useEffect(() => {
-    Promise.all([oceanWatchApi.getObservations({ limit: 8 }), oceanWatchApi.getHotspotStats()])
+    Promise.all([
+      oceanWatchApi.getObservations({
+        limit: 8,
+        region: filters.region !== 'ALL' ? filters.region : undefined,
+        start_date: filters.startDate || undefined,
+        end_date: filters.endDate || undefined,
+        ocean: filters.ocean !== 'ALL' ? filters.ocean : undefined,
+      }),
+      oceanWatchApi.getHotspotStats(),
+    ])
       .then(([observationResponse, stats]) => { setRecords(observationResponse.data); setHotspotStats(stats); })
       .catch(() => { setRecords([]); setHotspotStats(null); });
-  }, []);
+  }, [filters.region, filters.startDate, filters.endDate, filters.ocean]);
 
   const maxMeasurement = Math.max(...records.map((record) => record.measurement), 0);
   const observations = records.map((record) => ({
@@ -218,7 +229,7 @@ function HeroVisualization() {
                   {hotspotStats ? `${hotspotStats.total_clusters} clusters` : 'Unavailable'}
                 </p>
                 <p className="mt-0.5 text-[10px] text-ocean-400">
-                  Priority signal
+                  Global hotspot clusters
                 </p>
               </div>
               <div className="h-8 w-px bg-ocean-700/60" />

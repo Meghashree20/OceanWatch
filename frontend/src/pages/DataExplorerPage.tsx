@@ -1,7 +1,6 @@
 import { useEffect, useState } from 'react';
 import {
   BarChart3,
-  CalendarDays,
   Check,
   ChevronDown,
   ChevronLeft,
@@ -34,15 +33,6 @@ const columns = [
   'Concentration',
 ];
 
-const filterFields = [
-  { label: 'Date from', value: '', type: 'date', icon: CalendarDays },
-  { label: 'Date to', value: '', type: 'date', icon: CalendarDays },
-  { label: 'Region', value: 'All regions', type: 'select', icon: Layers3 },
-  { label: 'Ocean', value: 'All oceans', type: 'select', icon: Database },
-  { label: 'Marine setting', value: 'All settings', type: 'select', icon: SlidersHorizontal },
-  { label: 'Concentration range', value: 'Any concentration', type: 'select', icon: BarChart3 },
-];
-
 const visualizations = [
   { title: 'Observations over time', description: 'Temporal record coverage will appear here.', icon: Clock3 },
   { title: 'Concentration distribution', description: 'Distribution will appear here when values are loaded.', icon: BarChart3 },
@@ -64,7 +54,7 @@ export function DataExplorerPage() {
   const pageSize = 25;
 
   useEffect(() => {
-    oceanWatchApi.getObservations({ limit: 1000 })
+    oceanWatchApi.getAllObservations()
       .then((response) => {
         setAvailableRegions([...new Set(response.data.map((observation) => observation.region).filter((value): value is string => Boolean(value)))].sort());
         setAvailableOceans([...new Set(response.data.map((observation) => observation.ocean).filter((value): value is string => Boolean(value)))].sort());
@@ -138,8 +128,8 @@ export function DataExplorerPage() {
                 <p className="mt-2 text-sm text-ocean-300">Refine the observation query before records are requested from the API.</p>
               </div>
               <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3 xl:flex-1 xl:pl-8">
-                <label className="block"><span className="mb-1.5 block text-[11px] font-medium text-ocean-300">Date from</span><input type="date" value={filters.startDate} onChange={(event) => setFilters((current) => ({ ...current, startDate: event.target.value }))} className="w-full rounded-lg border border-navy-700 bg-navy-900 px-3 py-2.5 text-sm text-white outline-none focus:border-cyan-400 focus:ring-2 focus:ring-cyan-400/30" /></label>
-                <label className="block"><span className="mb-1.5 block text-[11px] font-medium text-ocean-300">Date to</span><input type="date" value={filters.endDate} onChange={(event) => setFilters((current) => ({ ...current, endDate: event.target.value }))} className="w-full rounded-lg border border-navy-700 bg-navy-900 px-3 py-2.5 text-sm text-white outline-none focus:border-cyan-400 focus:ring-2 focus:ring-cyan-400/30" /></label>
+                <label className="block"><span className="mb-1.5 block text-[11px] font-medium text-ocean-300">Date from (UTC)</span><input type="date" max={filters.endDate || undefined} value={filters.startDate} onChange={(event) => setFilters((current) => ({ ...current, startDate: event.target.value }))} className="w-full rounded-lg border border-navy-700 bg-navy-900 px-3 py-2.5 text-sm text-white outline-none focus:border-cyan-400 focus:ring-2 focus:ring-cyan-400/30" /></label>
+                <label className="block"><span className="mb-1.5 block text-[11px] font-medium text-ocean-300">Date to (UTC, inclusive)</span><input type="date" min={filters.startDate || undefined} value={filters.endDate} onChange={(event) => setFilters((current) => ({ ...current, endDate: event.target.value }))} className="w-full rounded-lg border border-navy-700 bg-navy-900 px-3 py-2.5 text-sm text-white outline-none focus:border-cyan-400 focus:ring-2 focus:ring-cyan-400/30" /></label>
                 <label className="block"><span className="mb-1.5 block text-[11px] font-medium text-ocean-300">Region</span><select value={filters.region} onChange={(event) => setFilters((current) => ({ ...current, region: event.target.value }))} className="w-full rounded-lg border border-navy-700 bg-navy-900 px-3 py-2.5 text-sm text-white outline-none focus:border-cyan-400"><option value="ALL">All regions</option>{availableRegions.map((region) => <option key={region} value={region}>{region}</option>)}</select></label>
                 <label className="block"><span className="mb-1.5 block text-[11px] font-medium text-ocean-300">Ocean</span><select value={filters.ocean} onChange={(event) => setFilters((current) => ({ ...current, ocean: event.target.value }))} className="w-full rounded-lg border border-navy-700 bg-navy-900 px-3 py-2.5 text-sm text-white outline-none focus:border-cyan-400"><option value="ALL">All oceans</option>{availableOceans.map((ocean) => <option key={ocean} value={ocean}>{ocean}</option>)}</select></label>
               </div>

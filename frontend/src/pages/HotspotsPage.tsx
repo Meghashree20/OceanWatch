@@ -15,7 +15,6 @@ import {
   Radio,
   RefreshCw,
   ScatterChart,
-  SlidersHorizontal,
   Target,
   Waves,
   X,
@@ -26,7 +25,8 @@ import { Button } from '@/components/ui/Button';
 import { Card, CardBody, CardHeader } from '@/components/ui/Card';
 import { SectionHeader } from '@/components/ui/SectionHeader';
 import { cn } from '@/lib/utils';
-import { oceanWatchApi, type Hotspot, type HotspotStats } from '@/lib/api/client';
+import { oceanWatchApi, type Hotspot } from '@/lib/api/client';
+import { useDashboardFilters, type DashboardFilters } from '@/lib/dashboardFilters';
 
 /* ------------------------------------------------------------------ */
 /* Types                                                               */
@@ -100,29 +100,52 @@ function toClusterData(hotspots: Hotspot[]): ClusterData[] {
 /* ------------------------------------------------------------------ */
 
 export function HotspotsPage() {
+  const { filters, setFilters, resetFilters } = useDashboardFilters();
   const [selectedCluster, setSelectedCluster] = useState<ClusterData | null>(null);
   const [clusters, setClusters] = useState<ClusterData[]>([]);
-  const [stats, setStats] = useState<HotspotStats | null>(null);
+  const [totalClusters, setTotalClusters] = useState(0);
+  const [availableRegions, setAvailableRegions] = useState<string[]>([]);
+  const [availableOceans, setAvailableOceans] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     let active = true;
-    Promise.all([oceanWatchApi.getHotspots({ limit: 500 }), oceanWatchApi.getHotspotStats()])
-      .then(([hotspotResponse, hotspotStats]) => {
+    oceanWatchApi.getAllObservations()
+      .then(({ data }) => {
+        if (!active) return;
+        setAvailableRegions([...new Set(data.map((observation) => observation.region).filter((value): value is string => Boolean(value)))].sort());
+        setAvailableOceans([...new Set(data.map((observation) => observation.ocean).filter((value): value is string => Boolean(value)))].sort());
+      })
+      .catch(() => null);
+    return () => { active = false; };
+  }, []);
+
+  useEffect(() => {
+    let active = true;
+    setLoading(true);
+    setError(null);
+    setSelectedCluster(null);
+    oceanWatchApi.getHotspots({
+      limit: 500,
+      region: filters.region !== 'ALL' ? filters.region : undefined,
+      ocean: filters.ocean !== 'ALL' ? filters.ocean : undefined,
+    })
+      .then((hotspotResponse) => {
         if (!active) return;
         setClusters(toClusterData(hotspotResponse.data));
-        setStats(hotspotStats);
+        setTotalClusters(hotspotResponse.total);
       })
       .catch((requestError: Error) => {
         if (active) setError(requestError.message);
       })
       .finally(() => { if (active) setLoading(false); });
     return () => { active = false; };
-  }, []);
+  }, [filters.region, filters.ocean]);
 
   const largestCluster = clusters.reduce((largest, cluster) => cluster.observations > (largest?.observations ?? 0) ? cluster : largest, null as ClusterData | null);
   const highestConcentration = clusters.reduce((highest, cluster) => Math.max(highest, cluster.maxConcentration), 0);
+  const observationsInReturnedClusters = clusters.reduce((total, cluster) => total + cluster.observations, 0);
 
   return (
     <div>
@@ -138,21 +161,32 @@ export function HotspotsPage() {
 
       <div className="container-page py-10 lg:py-14">
         {/* Filter panel */}
-        <FilterPanel />
+        <FilterPanel
+          filters={filters}
+          setFilters={setFilters}
+          resetFilters={resetFilters}
+          availableRegions={availableRegions}
+          availableOceans={availableOceans}
+        />
+        {(filters.startDate || filters.endDate) && (
+          <div className="mt-4 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-xs leading-5 text-amber-900">
+            This hotspot-list API supports region and ocean filters, but not date bounds. The selected date range is shared with observation views and does not change these hotspot results.
+          </div>
+        )}
 
         {/* Summary stats */}
         <div className="mt-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
           <SummaryStat
             icon={Database}
             label="Total observations"
-            value={stats ? stats.total_observations_in_clusters.toLocaleString() : '—'}
-            sub={loading ? 'Loading hotspot data' : error ? 'Backend unavailable' : 'Observations in clusters'}
+            value={loading ? '—' : observationsInReturnedClusters.toLocaleString()}
+            sub={loading ? 'Loading hotspot data' : error ? 'Backend unavailable' : 'In returned filtered clusters'}
           />
           <SummaryStat
             icon={Layers}
             label="Detected clusters"
-            value={stats ? stats.total_clusters.toLocaleString() : '—'}
-            sub={loading ? 'Loading hotspot data' : 'DBSCAN clusters'}
+            value={loading ? '—' : totalClusters.toLocaleString()}
+            sub={loading ? 'Loading hotspot data' : 'Matching DBSCAN clusters'}
           />
           <SummaryStat
             icon={CircleDot}
@@ -201,7 +235,21 @@ export function HotspotsPage() {
 /* Filter panel                                                         */
 /* ------------------------------------------------------------------ */
 
-function FilterPanel() {
+function FilterPanel({
+  filters,
+  setFilters,
+  resetFilters,
+  availableRegions,
+  availableOceans,
+}: {
+  filters: DashboardFilters;
+  setFilters: React.Dispatch<React.SetStateAction<DashboardFilters>>;
+  resetFilters: () => void;
+  availableRegions: string[];
+  availableOceans: string[];
+}) {
+  const filtersActive = filters.region !== 'ALL' || filters.ocean !== 'ALL' || Boolean(filters.startDate || filters.endDate);
+
   return (
     <Card>
       <CardHeader>
@@ -212,38 +260,25 @@ function FilterPanel() {
             </div>
             <h3 className="text-sm font-bold text-navy-950">Filters</h3>
           </div>
-          <Button variant="ghost" size="sm" className="px-2">
-            <RefreshCw className="h-3.5 w-3.5" />
-            Reset
-          </Button>
+          {filtersActive && <Button variant="ghost" size="sm" className="px-2" onClick={resetFilters}><RefreshCw className="h-3.5 w-3.5" />Clear shared filters</Button>}
         </div>
       </CardHeader>
       <CardBody>
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
-          <FilterField icon={CalendarRange} label="Date range">
-            <FilterSelect value="All years" />
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+          <FilterField icon={CalendarRange} label="Start date (UTC)">
+            <input type="date" max={filters.endDate || undefined} value={filters.startDate} onChange={(event) => setFilters((current) => ({ ...current, startDate: event.target.value }))} className="w-full rounded-lg border border-ocean-200 bg-white px-3 py-2.5 text-sm text-navy-900 focus:border-cyan-500 focus:outline-none focus:ring-1 focus:ring-cyan-500" />
+          </FilterField>
+          <FilterField icon={CalendarRange} label="End date (UTC, inclusive)">
+            <input type="date" min={filters.startDate || undefined} value={filters.endDate} onChange={(event) => setFilters((current) => ({ ...current, endDate: event.target.value }))} className="w-full rounded-lg border border-ocean-200 bg-white px-3 py-2.5 text-sm text-navy-900 focus:border-cyan-500 focus:outline-none focus:ring-1 focus:ring-cyan-500" />
           </FilterField>
           <FilterField icon={Globe2} label="Region">
-            <FilterSelect value="All regions" />
+            <select value={filters.region} onChange={(event) => setFilters((current) => ({ ...current, region: event.target.value }))} className="w-full rounded-lg border border-ocean-200 bg-white px-3 py-2.5 text-sm text-navy-900 focus:border-cyan-500 focus:outline-none focus:ring-1 focus:ring-cyan-500"><option value="ALL">All regions</option>{availableRegions.map((region) => <option key={region} value={region}>{region}</option>)}</select>
           </FilterField>
           <FilterField icon={Waves} label="Ocean">
-            <FilterSelect value="All oceans" />
-          </FilterField>
-          <FilterField icon={Layers} label="Cluster">
-            <FilterSelect value="All clusters" />
-          </FilterField>
-          <FilterField icon={SlidersHorizontal} label="Concentration range">
-            <div className="flex items-center gap-2">
-              <span className="font-mono text-xs text-ocean-500">0.0</span>
-              <div className="relative h-1.5 flex-1 rounded-full bg-ocean-100">
-                <div className="absolute left-[10%] right-[25%] h-full rounded-full bg-cyan-400" />
-                <div className="absolute left-[10%] top-1/2 h-3 w-3 -translate-y-1/2 rounded-full border-2 border-white bg-cyan-500 shadow" />
-                <div className="absolute left-[75%] top-1/2 h-3 w-3 -translate-y-1/2 rounded-full border-2 border-white bg-cyan-500 shadow" />
-              </div>
-              <span className="font-mono text-xs text-ocean-500">10.0</span>
-            </div>
+            <select value={filters.ocean} onChange={(event) => setFilters((current) => ({ ...current, ocean: event.target.value }))} className="w-full rounded-lg border border-ocean-200 bg-white px-3 py-2.5 text-sm text-navy-900 focus:border-cyan-500 focus:outline-none focus:ring-1 focus:ring-cyan-500"><option value="ALL">All oceans</option>{availableOceans.map((ocean) => <option key={ocean} value={ocean}>{ocean}</option>)}</select>
           </FilterField>
         </div>
+        <p className="mt-3 text-xs leading-5 text-ocean-500">Region and ocean filters are sent to the hotspot-list API. Date values are shared with observation views; hotspot listing currently has no date-filter parameters.</p>
       </CardBody>
     </Card>
   );
@@ -265,15 +300,6 @@ function FilterField({
         {label}
       </label>
       {children}
-    </div>
-  );
-}
-
-function FilterSelect({ value }: { value: string }) {
-  return (
-    <div className="flex items-center justify-between rounded-lg border border-ocean-200 bg-white px-3 py-2.5 text-sm text-ocean-600 transition-colors hover:border-cyan-300">
-      <span>{value}</span>
-      <SlidersHorizontal className="h-3.5 w-3.5 text-ocean-400" />
     </div>
   );
 }

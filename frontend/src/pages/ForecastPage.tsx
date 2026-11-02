@@ -15,6 +15,7 @@ import { PageHeader } from '@/components/layout/PageShell';
 import { Badge } from '@/components/ui/Badge';
 import { Card, CardBody, CardHeader } from '@/components/ui/Card';
 import { oceanWatchApi, type Forecast, type ForecastMetrics } from '@/lib/api/client';
+import { useDashboardFilters } from '@/lib/dashboardFilters';
 
 const performanceItems = [
   { label: 'MAE', description: 'Mean absolute error' },
@@ -24,6 +25,7 @@ const performanceItems = [
 ];
 
 export function ForecastPage() {
+  const { filters, setFilters } = useDashboardFilters();
   const [zones, setZones] = useState<string[]>([]);
   const [zone, setZone] = useState('');
   const [horizon, setHorizon] = useState(3);
@@ -44,14 +46,30 @@ export function ForecastPage() {
       const observationZones = observations?.data.map((observation) => observation.region).filter((value): value is string => Boolean(value)) ?? [];
       const availableZones = modelMetrics?.zones?.length ? modelMetrics.zones : [...new Set(observationZones)];
       setZones(availableZones);
-      setZone(availableZones[0] ?? '');
       setLoading(false);
     });
     return () => { active = false; };
   }, []);
 
   useEffect(() => {
-    if (!zone) return;
+    if (!zones.length) return;
+    if (filters.region === 'ALL') {
+      setZone((current) => zones.includes(current) ? current : zones[0]);
+    } else if (zones.includes(filters.region)) {
+      setZone(filters.region);
+      setError(null);
+    } else {
+      setZone('');
+      setForecast(null);
+      setError(`No trained forecast zone is available for ${filters.region}.`);
+    }
+  }, [filters.region, zones]);
+
+  useEffect(() => {
+    if (!zone) {
+      setLoading(false);
+      return;
+    }
     let active = true;
     setLoading(true);
     setError(null);
@@ -86,7 +104,7 @@ export function ForecastPage() {
                 <p className="mt-2 text-sm text-ocean-300">Choose the context for the next model run.</p>
               </div>
               <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4 xl:flex-1 xl:pl-8">
-                <label className="block"><span className="mb-1.5 block text-[11px] font-medium text-ocean-300">Region</span><span className="relative block"><MapPin className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-cyan-300" /><select value={zone} onChange={(event) => setZone(event.target.value)} disabled={!zones.length} className="w-full appearance-none rounded-lg border border-navy-700 bg-navy-900 py-2.5 pl-9 pr-9 text-sm text-white outline-none focus:border-cyan-400"><option value="">{zones.length ? 'Select a region' : 'No model zones available'}</option>{zones.map((availableZone) => <option key={availableZone} value={availableZone}>{availableZone}</option>)}</select><ChevronDown className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-ocean-400" /></span></label>
+                <label className="block"><span className="mb-1.5 block text-[11px] font-medium text-ocean-300">Region</span><span className="relative block"><MapPin className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-cyan-300" /><select value={zone} onChange={(event) => { setZone(event.target.value); setFilters((current) => ({ ...current, region: event.target.value || 'ALL' })); }} disabled={!zones.length} className="w-full appearance-none rounded-lg border border-navy-700 bg-navy-900 py-2.5 pl-9 pr-9 text-sm text-white outline-none focus:border-cyan-400"><option value="">{zones.length ? 'Select a region' : 'No model zones available'}</option>{zones.map((availableZone) => <option key={availableZone} value={availableZone}>{availableZone}</option>)}</select><ChevronDown className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-ocean-400" /></span></label>
                 <label className="block"><span className="mb-1.5 block text-[11px] font-medium text-ocean-300">Forecast horizon</span><span className="relative block"><Clock3 className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-cyan-300" /><select value={horizon} onChange={(event) => setHorizon(Number(event.target.value))} className="w-full appearance-none rounded-lg border border-navy-700 bg-navy-900 py-2.5 pl-9 pr-9 text-sm text-white outline-none focus:border-cyan-400"><option value={3}>3 periods</option><option value={6}>6 periods</option><option value={12}>12 periods</option></select><ChevronDown className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-ocean-400" /></span></label>
                 <div className="rounded-lg border border-navy-700 bg-navy-900 px-3 py-2.5 text-sm text-ocean-300"><CalendarDays className="mr-2 inline h-4 w-4 text-cyan-300" />Monthly aggregation</div>
                 <div className="rounded-lg border border-navy-700 bg-navy-900 px-3 py-2.5 text-sm text-ocean-300"><SlidersHorizontal className="mr-2 inline h-4 w-4 text-cyan-300" />Backend model output</div>
@@ -94,6 +112,12 @@ export function ForecastPage() {
             </div>
           </CardBody>
         </Card>
+
+        {(filters.startDate || filters.endDate || filters.ocean !== 'ALL') && (
+          <div className="mt-4 rounded-lg border border-sky-200 bg-sky-50 px-4 py-3 text-xs leading-5 text-sky-900">
+            Forecasts use the trained region-month model output. The forecast endpoint accepts a region zone and horizon, but does not support date-range or ocean filters.
+          </div>
+        )}
 
         <div className="mt-8 grid gap-6 xl:grid-cols-[1.45fr_0.55fr]">
           <Card>
@@ -248,7 +272,7 @@ function ForecastChart({ forecast, error }: { forecast: Forecast | null; error: 
     setSelectedPoint(null);
     setShowHistorical(true);
     setShowPredicted(true);
-  }, [allPoints.length]);
+  }, [forecast?.zone, forecast?.horizon, allPoints.length]);
 
   const visiblePoints = useMemo(() => {
     if (!allPoints.length) return [];
@@ -280,6 +304,7 @@ function ForecastChart({ forecast, error }: { forecast: Forecast | null; error: 
   };
   const setRange = (preset: typeof rangePreset) => {
     setRangePreset(preset);
+    setSelectedPoint(null);
     const total = allPoints.length;
     const start = preset === 'RECENT_HALF' ? Math.floor(total * 0.5) : preset === 'RECENT_QUARTER' ? Math.floor(total * 0.75) : 0;
     setStartIndex(start);
@@ -287,6 +312,7 @@ function ForecastChart({ forecast, error }: { forecast: Forecast | null; error: 
   };
   const zoom = (direction: 'in' | 'out') => {
     if (!allPoints.length) return;
+    setSelectedPoint(null);
     const span = endIndex - startIndex;
     if (direction === 'in' && span > 3) {
       const delta = Math.max(1, Math.floor(span * 0.2));
@@ -298,6 +324,21 @@ function ForecastChart({ forecast, error }: { forecast: Forecast | null; error: 
       setEndIndex((value) => Math.min(allPoints.length - 1, value + delta));
     }
     setRangePreset('ALL');
+  };
+  const setDateBound = (value: string, bound: 'start' | 'end') => {
+    if (!value || !allPoints.length) return;
+    setSelectedPoint(null);
+    setRangePreset('ALL');
+    if (bound === 'start') {
+      const index = allPoints.findIndex((point) => point.date >= value);
+      if (index >= 0) setStartIndex(Math.min(index, endIndex));
+    } else {
+      let index = -1;
+      allPoints.forEach((point, pointIndex) => {
+        if (point.date <= value) index = pointIndex;
+      });
+      if (index >= 0) setEndIndex(Math.max(index, startIndex));
+    }
   };
 
   return (
@@ -326,6 +367,34 @@ function ForecastChart({ forecast, error }: { forecast: Forecast | null; error: 
           <span className="font-mono normal-case">{visiblePoints.length} points</span>
         </div>
       )}
+      {forecast && visiblePoints.length > 0 && (
+        <div className="relative z-10 mt-2 grid grid-cols-2 gap-2 sm:flex sm:items-center">
+          <label className="flex min-w-0 items-center gap-2 text-[10px] font-semibold text-ocean-600">
+            <span>From</span>
+            <input
+              type="date"
+              aria-label="Forecast chart start date"
+              min={allPoints[0]?.date}
+              max={visiblePoints[visiblePoints.length - 1]?.date}
+              value={visiblePoints[0]?.date ?? ''}
+              onChange={(event) => setDateBound(event.target.value, 'start')}
+              className="min-w-0 rounded border border-ocean-200 bg-white px-2 py-1 font-mono text-[10px] text-ocean-700"
+            />
+          </label>
+          <label className="flex min-w-0 items-center gap-2 text-[10px] font-semibold text-ocean-600">
+            <span>To</span>
+            <input
+              type="date"
+              aria-label="Forecast chart end date"
+              min={visiblePoints[0]?.date}
+              max={allPoints[allPoints.length - 1]?.date}
+              value={visiblePoints[visiblePoints.length - 1]?.date ?? ''}
+              onChange={(event) => setDateBound(event.target.value, 'end')}
+              className="min-w-0 rounded border border-ocean-200 bg-white px-2 py-1 font-mono text-[10px] text-ocean-700"
+            />
+          </label>
+        </div>
+      )}
       <svg className="relative z-0 mt-2 h-52 w-full sm:h-60" viewBox="0 0 100 100" preserveAspectRatio="none" aria-label="Historical and predicted pollution values" onMouseLeave={() => setHoveredPoint(null)}>
         {forecast && <>
           {showHistorical && <polyline points={historicalPath} fill="none" stroke="#2d5868" strokeWidth="1.5" vectorEffect="non-scaling-stroke" />}
@@ -334,7 +403,34 @@ function ForecastChart({ forecast, error }: { forecast: Forecast | null; error: 
             const [x, y] = toPoint(point, index).split(',');
             const isVisible = point.series === 'historical' ? showHistorical : showPredicted;
             if (!isVisible) return null;
-            return <g key={`${point.series}-${point.date}-${index}`}><circle cx={x} cy={y} r={selectedPoint === index ? 3 : hoveredPoint === index ? 2.5 : 1.5} fill={point.series === 'historical' ? '#2d5868' : '#06b6d4'} stroke="white" strokeWidth="0.8" vectorEffect="non-scaling-stroke" /><rect x={Number(x) - 4} y="5" width="8" height="90" fill="transparent" className="cursor-pointer" onMouseEnter={() => setHoveredPoint(index)} onClick={() => setSelectedPoint(index)} /></g>;
+            return (
+              <g key={`${point.series}-${point.date}-${index}`}>
+                <circle cx={x} cy={y} r={selectedPoint === index ? 3 : hoveredPoint === index ? 2.5 : 1.5} fill={point.series === 'historical' ? '#2d5868' : '#06b6d4'} stroke="white" strokeWidth="0.8" vectorEffect="non-scaling-stroke" />
+                <rect
+                  x={Number(x) - 4}
+                  y="5"
+                  width="8"
+                  height="90"
+                  fill="transparent"
+                  className="cursor-pointer outline-none focus-visible:stroke-cyan-600 focus-visible:stroke-1"
+                  role="button"
+                  tabIndex={0}
+                  aria-label={`Inspect ${point.series === 'historical' ? 'actual' : 'predicted'} pollution on ${point.date}: ${point.value.toFixed(3)} pieces per cubic meter`}
+                  onMouseEnter={() => setHoveredPoint(index)}
+                  onFocus={() => setHoveredPoint(index)}
+                  onBlur={() => setHoveredPoint(null)}
+                  onClick={() => setSelectedPoint(index)}
+                  onKeyDown={(event) => {
+                    if (event.key === 'Enter' || event.key === ' ') {
+                      event.preventDefault();
+                      setSelectedPoint(index);
+                    }
+                  }}
+                >
+                  <title>{`${point.series === 'historical' ? 'Actual' : 'Predicted'} · ${point.date} · ${point.value.toFixed(3)} pieces/m³`}</title>
+                </rect>
+              </g>
+            );
           })}
         </>}
       </svg>

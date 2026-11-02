@@ -223,6 +223,31 @@ export class OceanWatchApiClient {
     return this.requestJson<PaginatedObservations>(this.withQuery('/api/data', params), { signal: undefined });
   }
 
+  async getAllObservations(params: {
+    start_date?: string;
+    end_date?: string;
+    region?: string;
+    ocean?: string;
+    concentration_class?: string;
+  } = {}): Promise<PaginatedObservations> {
+    const limit = 1000;
+    const firstPage = await this.getObservations({ ...params, skip: 0, limit });
+    if (firstPage.data.length >= firstPage.total) return firstPage;
+
+    const pageCount = Math.ceil(firstPage.total / limit);
+    const remainingPages = await Promise.all(
+      Array.from({ length: Math.max(0, pageCount - 1) }, (_, index) =>
+        this.getObservations({ ...params, skip: (index + 1) * limit, limit }),
+      ),
+    );
+    return {
+      data: [firstPage, ...remainingPages].flatMap((page) => page.data),
+      total: firstPage.total,
+      skip: 0,
+      limit: firstPage.total,
+    };
+  }
+
   getForecast(zoneId: string, horizon = 3) {
     return this.requestJson<Forecast>(this.withQuery(`/api/forecast/${encodeURIComponent(zoneId)}`, { horizon }), { signal: undefined });
   }
