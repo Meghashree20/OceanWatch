@@ -1,6 +1,6 @@
 from pydantic import BaseModel, Field
 from datetime import datetime
-from typing import Any, Optional, List, Dict
+from typing import Any, Literal, Optional, List, Dict
 
 from app.core.config import settings
 
@@ -33,6 +33,9 @@ class HotspotResponse(BaseModel):
     ocean: Optional[str] = None
     severity: str
     label: str = "Potential Pollution Hotspot"
+    temporal_classification: Optional[Literal["persistent", "emerging", "persistent_emerging"]] = None
+    historical_observation_count: Optional[int] = None
+    recent_observation_count: Optional[int] = None
 
 class HotspotStatsResponse(BaseModel):
     total_clusters: int
@@ -60,6 +63,10 @@ class DetectHotspotsResponse(BaseModel):
     eps_km: float
     min_samples: int
     severity_distribution: Dict[str, int]
+    mode: Literal["historical", "recent", "compare"] = "historical"
+    recent_window_days: int = 90
+    historical_observations_used: Optional[int] = None
+    recent_observations_used: Optional[int] = None
 
 
 class HotspotRunResponse(BaseModel):
@@ -74,6 +81,8 @@ class HotspotRunResponse(BaseModel):
     severity_distribution: Dict[str, int]
     filters: Dict[str, Any] = Field(default_factory=dict)
     status: str = "success"
+    mode: Literal["historical", "recent", "compare"] = "historical"
+    recent_window_days: int = 90
 
 
 class HotspotRunListResponse(BaseModel):
@@ -88,3 +97,5 @@ class DetectHotspotsRequest(BaseModel):
     region: Optional[str] = None
     start_date: Optional[str] = None
     end_date: Optional[str] = None
+    mode: Literal["historical", "recent", "compare"] = "historical"
+    recent_window_days: int = Field(90, ge=1, le=3650)

@@ -4,12 +4,39 @@ from typing import Any, Dict, List, Optional
 
 from app.db.mongodb import db_client
 from app.ml.recommendation import score_hotspot
+from app.services.forecast_service import ForecastService
 
 
 HOTSPOT_COLLECTION = "hotspot_results"
 
 
 class RecommendationService:
+    @staticmethod
+    async def _forecast_trend(hotspot: Dict[str, Any]) -> Dict[str, Any]:
+        region = hotspot.get("dominant_region") or hotspot.get("region")
+        if not region:
+            return {}
+        try:
+            forecast = await ForecastService.forecast(region, horizon=3)
+        except (FileNotFoundError, ValueError):
+            return {}
+        if (
+            forecast.get("metric") != "microplastic_concentration"
+            or forecast.get("unit") != "pieces/m3"
+        ):
+            return {}
+
+        historical = forecast.get("historical_values") or []
+        predicted = forecast.get("predicted_values") or []
+        if not historical or not predicted:
+            return {}
+        latest_value = historical[-1].get("value")
+        forecast_values = [item.get("value") for item in predicted]
+        return {
+            "historical_value": latest_value,
+            "forecast_values": forecast_values,
+        }
+
     @staticmethod
     async def _get_hotspots(cluster_id: Optional[int] = None, detection_run_id: Optional[str] = None, limit: int = 500) -> List[Dict[str, Any]]:
         collection = db_client.db[HOTSPOT_COLLECTION]
@@ -37,7 +64,16 @@ class RecommendationService:
         recommendations = []
         for hotspot in hotspots:
             run_hotspots = await RecommendationService._get_hotspots(detection_run_id=hotspot.get("detection_run_id"), limit=500)
-            recommendations.append(score_hotspot(hotspot, ecological_risk, human_exposure, cleanup_feasibility, pollution_reference=RecommendationService._reference(run_hotspots)))
+            trend = await RecommendationService._forecast_trend(hotspot)
+            recommendations.append(score_hotspot(
+                hotspot,
+                ecological_risk,
+                human_exposure,
+                cleanup_feasibility,
+                pollution_reference=RecommendationService._reference(run_hotspots),
+                forecast_values=trend.get("forecast_values"),
+                historical_value=trend.get("historical_value"),
+            ))
         recommendations.sort(key=lambda item: item["priority_score"] if item["priority_score"] is not None else -1, reverse=True)
         return {"data": recommendations, "total": len(recommendations)}
 
@@ -53,7 +89,16 @@ class RecommendationService:
         if not hotspots:
             return None
         run_hotspots = await RecommendationService._get_hotspots(detection_run_id=hotspots[0].get("detection_run_id"), limit=500)
-        return score_hotspot(hotspots[0], ecological_risk, human_exposure, cleanup_feasibility, pollution_reference=RecommendationService._reference(run_hotspots))
+        trend = await RecommendationService._forecast_trend(hotspots[0])
+        return score_hotspot(
+            hotspots[0],
+            ecological_risk,
+            human_exposure,
+            cleanup_feasibility,
+            pollution_reference=RecommendationService._reference(run_hotspots),
+            forecast_values=trend.get("forecast_values"),
+            historical_value=trend.get("historical_value"),
+        )
 
     @staticmethod
     async def calculate(

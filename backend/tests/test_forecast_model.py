@@ -1,6 +1,16 @@
 import pandas as pd
 
-from app.ml.forecast_model import ForecastConfig, aggregate_monthly, chronological_split, create_features, train_forecast_model
+import app.ml.forecast_model as forecast_model
+from app.ml.forecast_model import (
+    FORECAST_FEATURE_VERSION,
+    ForecastConfig,
+    MODEL_CANDIDATES,
+    aggregate_monthly,
+    chronological_split,
+    create_features,
+    evaluate_regions,
+    train_forecast_model,
+)
 
 
 def _records():
@@ -31,6 +41,7 @@ def test_features_have_lags_and_chronological_split():
 
 def test_train_forecast_model_reports_baseline_metrics():
     artifact = train_forecast_model(aggregate_monthly(_records()), ForecastConfig(min_periods=6))
+    features = create_features(aggregate_monthly(_records()))
     assert artifact["zones"] == ["North", "South"]
     assert "xgboost" in artifact["metrics"]
     assert "previous_period_baseline" in artifact["metrics"]
@@ -38,4 +49,61 @@ def test_train_forecast_model_reports_baseline_metrics():
     assert artifact["periods"]["training"]["end"] <= artifact["periods"]["validation"]["start"]
     assert artifact["periods"]["validation"]["end"] <= artifact["periods"]["testing"]["start"]
     assert artifact["feature_columns"]
+    assert artifact["feature_version"] == FORECAST_FEATURE_VERSION
     assert artifact["preprocessing"]["aggregation"] == "region + calendar month"
+    assert artifact["deployment_training_rows"] == len(features)
+    assert artifact["deployment_training_regions"] == ["North", "South"]
+    assert artifact["region_evaluation"]["North"]["evaluation_points"] >= 3
+    assert artifact["metrics"]["evaluation_strategy"] == "regional expanding windows"
+    assert "global_chronological_holdout" in artifact["metrics"]
+
+
+def test_region_evaluation_uses_expanding_history_and_compares_persistence(monkeypatch):
+    fitted_regions = []
+
+    class NextMonthPipeline:
+        def fit(self, features, target):
+            fitted_regions.append(set(features["region"]))
+            return self
+
+        def predict(self, features):
+            return features["lag_1"].to_numpy() + 1
+
+    monkeypatch.setattr(forecast_model, "_build_pipeline", lambda params, random_state: NextMonthPipeline())
+    features = create_features(aggregate_monthly(_records()))
+
+    regional, predictions = evaluate_regions(
+        features,
+        ["North", "South"],
+        MODEL_CANDIDATES[0],
+        ForecastConfig(),
+    )
+
+    assert regional["North"]["strategy"] == "xgboost"
+    assert regional["South"]["strategy"] == "xgboost"
+    assert regional["North"]["evaluation_points"] == 3
+    assert regional["North"]["xgboost_mae"] < regional["North"]["persistence_mae"]
+    assert set(predictions["region"]) == {"North", "South"}
+    assert len(fitted_regions) == len(predictions)
+    assert all(region_set == {"North", "South"} for region_set in fitted_regions)
+    assert predictions.groupby("region")["target_period"].min().to_dict() == {
+        "North": pd.Timestamp("2020-10-01"),
+        "South": pd.Timestamp("2020-10-01"),
+    }
+
+
+def test_region_without_enough_evaluation_rows_uses_persistence():
+    monthly = aggregate_monthly(_records())
+    sparse = monthly[monthly["region"] == "North"].head(8)
+    features = create_features(sparse)
+
+    evaluations, predictions = evaluate_regions(
+        features,
+        ["North"],
+        MODEL_CANDIDATES[0],
+        ForecastConfig(),
+    )
+
+    assert evaluations["North"]["strategy"] == "persistence"
+    assert evaluations["North"]["reason"] == "insufficient_history_for_regional_evaluation"
+    assert predictions.empty

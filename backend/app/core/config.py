@@ -15,6 +15,11 @@ class Settings(BaseSettings):
 
     DBSCAN_EPS_KM: float = 150.0
     DBSCAN_MIN_SAMPLES: int = 10
+
+    # Satellite U-Net settings
+    SATELLITE_MODEL_PATH: str = "models/model.pth"
+    SATELLITE_SAMPLES_DIR: str = "samples"
+    SATELLITE_DEVICE: str = "cpu"
     
     # CORS
     BACKEND_CORS_ORIGINS: List[str] = ["http://localhost:3000", "http://localhost:5173", "http://localhost:8000"]

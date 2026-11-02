@@ -25,6 +25,9 @@ async def detect_hotspots(body: DetectHotspotsRequest):
     - **min_samples**: minimum points per cluster (default 10)
     - **region**: optional filter by region name
     - **start_date** / **end_date**: optional ISO date strings (YYYY-MM-DD)
+    - **mode**: `historical` (all selected observations), `recent` (recent window), or
+      `compare` (disjoint pre-window history and recent window; classifications included)
+    - **recent_window_days**: recent window size in days (default 90)
 
     Date-only end bounds include the full UTC calendar day. All datetime inputs are
     normalized to UTC, and an end date before a start date returns HTTP 400.
@@ -38,6 +41,8 @@ async def detect_hotspots(body: DetectHotspotsRequest):
             region=body.region,
             start_date=body.start_date,
             end_date=body.end_date,
+            mode=body.mode,
+            recent_window_days=body.recent_window_days,
         )
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc

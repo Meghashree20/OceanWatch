@@ -9,6 +9,7 @@ class RecommendationResponse(BaseModel):
     cluster: Dict[str, Any]
     priority_score: Optional[float]
     priority_level: str
+    trend_adjustment: Optional[float] = None
     factor_scores: Dict[str, Dict[str, Any]]
     weighted_components: Optional[Dict[str, float]] = None
     weights: Dict[str, float]
