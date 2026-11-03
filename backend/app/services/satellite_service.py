@@ -151,7 +151,10 @@ class SatelliteService:
         return base64.b64encode(buffer.getvalue()).decode("ascii")
 
     @classmethod
-    def _validate_and_read_dataset(cls, dataset: Any) -> tuple[np.ndarray, SatelliteRasterMetadata]:
+    def _validate_and_read_dataset(
+        cls,
+        dataset: Any,
+    ) -> tuple[np.ndarray, SatelliteRasterMetadata, np.ndarray]:
         """Validate raster structure, band count, dimensions, and numeric values."""
         if dataset.count != 11:
             raise ValueError(
@@ -162,15 +165,12 @@ class SatelliteService:
             raise ValueError(f"Invalid raster dimensions: width={dataset.width}, height={dataset.height}.")
 
         try:
-            bands = dataset.read()
+            masked_bands = dataset.read(masked=True)
         except Exception as exc:
             raise ValueError(f"Failed to read raster pixel data: {exc}") from exc
 
-        if not np.issubdtype(bands.dtype, np.number):
-            raise ValueError(f"Raster pixel data must be numeric. Found dtype: {bands.dtype}")
-
-        if not np.isfinite(bands).any():
-            raise ValueError("Raster data contains no finite numeric pixel values.")
+        if not np.issubdtype(masked_bands.dtype, np.number):
+            raise ValueError(f"Raster pixel data must be numeric. Found dtype: {masked_bands.dtype}")
 
         bounds_list = [float(dataset.bounds.left), float(dataset.bounds.bottom),
                        float(dataset.bounds.right), float(dataset.bounds.top)] if dataset.bounds else None
@@ -180,10 +180,17 @@ class SatelliteService:
             width=dataset.width,
             height=dataset.height,
             count=dataset.count,
+            nodata=float(dataset.nodata) if dataset.nodata is not None else None,
             crs=str(dataset.crs) if dataset.crs else None,
             bounds=bounds_list,
         )
-        return bands, metadata
+        valid_pixels = ~np.ma.getmaskarray(masked_bands).any(axis=0)
+        bands = np.asarray(masked_bands.filled(np.nan), dtype=np.float32)
+        valid_pixels &= np.isfinite(bands).all(axis=0)
+        if not valid_pixels.any():
+            raise ValueError("Raster data contains no valid numeric pixels.")
+        bands[:, ~valid_pixels] = 0.0
+        return bands, metadata, valid_pixels
 
     @classmethod
     def _execute_analysis(
@@ -191,6 +198,7 @@ class SatelliteService:
         bands: np.ndarray,
         meta: SatelliteRasterMetadata,
         site_info: Dict[str, Any],
+        valid_pixels: np.ndarray,
     ) -> SatelliteAnalysisResponse:
         """Shared analysis engine: runs forward segmentation and builds structured result."""
         detector = cls.get_detector()
@@ -206,8 +214,8 @@ class SatelliteService:
         mask = detector.predict(image_tensor).numpy()
 
         # Class 0 = Marine Debris in MARIDA taxonomy
-        debris_mask = (mask == 0)
-        total_pixels = int(mask.size)
+        debris_mask = (mask == 0) & valid_pixels
+        total_pixels = int(valid_pixels.sum())
         debris_pixels = int(debris_mask.sum())
         coverage_pct = round((debris_pixels / total_pixels) * 100.0, 4) if total_pixels > 0 else 0.0
 
@@ -245,13 +253,13 @@ class SatelliteService:
 
         try:
             with rasterio.open(sample_path) as dataset:
-                bands, meta = cls._validate_and_read_dataset(dataset)
+                bands, meta, valid_pixels = cls._validate_and_read_dataset(dataset)
         except Exception as exc:
             if isinstance(exc, (ValueError, FileNotFoundError)):
                 raise
             raise ValueError(f"Error opening GeoTIFF file '{sample_path.name}': {exc}") from exc
 
-        return cls._execute_analysis(bands, meta, hotspot)
+        return cls._execute_analysis(bands, meta, hotspot, valid_pixels)
 
     @classmethod
     def analyze_geotiff_bytes(
@@ -269,7 +277,7 @@ class SatelliteService:
         try:
             with MemoryFile(file_bytes) as mem_file:
                 with mem_file.open() as dataset:
-                    bands, meta = cls._validate_and_read_dataset(dataset)
+                    bands, meta, valid_pixels = cls._validate_and_read_dataset(dataset)
         except Exception as exc:
             if isinstance(exc, ValueError):
                 raise
@@ -291,4 +299,4 @@ class SatelliteService:
             "description": "User-uploaded Sentinel-2 L2A 11-band GeoTIFF patch.",
             "sample_file": None,
         }
-        return cls._execute_analysis(bands, meta, custom_site)
+        return cls._execute_analysis(bands, meta, custom_site, valid_pixels)

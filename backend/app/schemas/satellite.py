@@ -18,6 +18,7 @@ class SatelliteRasterMetadata(BaseModel):
     width: int
     height: int
     count: int
+    nodata: Optional[float] = None
     crs: Optional[str] = None
     bounds: Optional[List[float]] = None
 
@@ -35,4 +36,3 @@ class SatelliteAnalysisResponse(BaseModel):
     overlay_png_base64: str
     raster_metadata: Optional[SatelliteRasterMetadata] = None
     status: str = "success"
-

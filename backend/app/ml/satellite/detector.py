@@ -75,8 +75,15 @@ class DebrisDetector:
                 f"Image tensor must have shape ({self.input_bands}, H, W) or (1, {self.input_bands}, H, W). "
                 f"Got shape {tuple(image.shape)}."
             )
+        height, width = image.shape[-2:]
+        padded_height = max(32, ((height + 15) // 16) * 16)
+        padded_width = max(32, ((width + 15) // 16) * 16)
+        pad_bottom = padded_height - height
+        pad_right = padded_width - width
+        if pad_bottom or pad_right:
+            image = torch.nn.functional.pad(image, (0, pad_right, 0, pad_bottom), mode="replicate")
+
         logits = self.model(image.to(device=self.device, dtype=torch.float32))
-        return logits.argmax(dim=1).squeeze(0)
+        return logits.argmax(dim=1).squeeze(0)[:height, :width]
 
     __call__ = predict
-
