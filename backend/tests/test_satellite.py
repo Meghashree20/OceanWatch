@@ -11,8 +11,8 @@ SAMPLE_TIF = Path(__file__).resolve().parents[1] / "samples" / "accra-coast.tif"
 
 
 @pytest.fixture(scope="module")
-def client():
-    with TestClient(app) as test_client:
+def client(authenticated_app):
+    with TestClient(authenticated_app) as test_client:
         yield test_client
 
 
@@ -86,4 +86,3 @@ def test_analyze_invalid_file_returns_422(client):
     )
     assert response.status_code == 422
     assert "Invalid or unreadable GeoTIFF" in response.json()["error"]["message"]
-

@@ -5,7 +5,7 @@ from app.main import app
 from app.db.mongodb import connect_to_mongo, close_mongo_connection
 
 @pytest_asyncio.fixture(autouse=True)
-async def setup_db():
+async def setup_db(authenticated_app):
     await connect_to_mongo()
     yield
     await close_mongo_connection()

@@ -29,6 +29,8 @@ async def create_indexes():
 
         await db_client.db["hotspot_detection_runs"].create_index("run_id", unique=True)
         await db_client.db["hotspot_detection_runs"].create_index([("created_at", pymongo.DESCENDING)])
+
+        await db_client.db["users"].create_index("email", unique=True)
         
         logger.info("Indexes created successfully!")
     except Exception as exc:

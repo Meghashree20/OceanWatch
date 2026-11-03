@@ -1,12 +1,13 @@
 from typing import Optional
 
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query
 
+from app.core.auth import require_active_user
 from app.schemas.recommendation import RecommendationCalculateRequest, RecommendationListResponse, RecommendationResponse
 from app.services.recommendation_service import RecommendationService
 
 
-router = APIRouter()
+router = APIRouter(dependencies=[Depends(require_active_user)])
 
 
 @router.post("/calculate", response_model=RecommendationResponse, summary="Calculate a cleanup priority")

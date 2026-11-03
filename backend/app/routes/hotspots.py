@@ -1,6 +1,7 @@
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query
 from typing import Optional
 
+from app.core.auth import require_active_user
 from app.schemas.hotspot import (
     DetectHotspotsRequest,
     DetectHotspotsResponse,
@@ -12,7 +13,7 @@ from app.schemas.hotspot import (
 )
 from app.services.hotspot_service import HotspotService
 
-router = APIRouter()
+router = APIRouter(dependencies=[Depends(require_active_user)])
 
 
 @router.post("/detect", response_model=DetectHotspotsResponse, summary="Detect pollution hotspots")

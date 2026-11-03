@@ -1,5 +1,6 @@
+from typing import List, Literal, Optional
+
 from pydantic_settings import BaseSettings, SettingsConfigDict
-from typing import List, Union
 
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(case_sensitive=True, env_file=".env")
@@ -15,6 +16,15 @@ class Settings(BaseSettings):
 
     DBSCAN_EPS_KM: float = 150.0
     DBSCAN_MIN_SAMPLES: int = 10
+
+    # Authentication
+    AUTH_JWT_SECRET: Optional[str] = None
+    AUTH_JWT_ALGORITHM: str = "HS256"
+    AUTH_ACCESS_TOKEN_EXPIRE_MINUTES: int = 30
+    AUTH_COOKIE_NAME: str = "oceanwatch_access_token"
+    AUTH_COOKIE_SECURE: bool = False
+    AUTH_COOKIE_SAMESITE: Literal["lax", "strict", "none"] = "lax"
+    AUTH_COOKIE_PATH: str = "/"
 
     # Satellite U-Net settings
     SATELLITE_MODEL_PATH: str = "models/model.pth"

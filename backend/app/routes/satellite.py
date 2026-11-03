@@ -3,12 +3,13 @@ from __future__ import annotations
 import json
 from typing import List, Optional
 
-from fastapi import APIRouter, File, Form, HTTPException, Request, UploadFile
+from fastapi import APIRouter, Depends, File, Form, HTTPException, Request, UploadFile
 
+from app.core.auth import require_active_user
 from app.schemas.satellite import HotspotCatalogItem, SatelliteAnalysisResponse
 from app.services.satellite_service import SatelliteService
 
-router = APIRouter()
+router = APIRouter(dependencies=[Depends(require_active_user)])
 
 
 @router.get("/catalog", response_model=List[HotspotCatalogItem], summary="Get pre-registered coastal monitoring sites")
@@ -89,4 +90,3 @@ async def analyze_hotspot_by_id(hotspot_id: str):
         raise HTTPException(status_code=422, detail=str(exc)) from exc
     except Exception as exc:
         raise HTTPException(status_code=500, detail=f"Satellite analysis failed: {exc}") from exc
-

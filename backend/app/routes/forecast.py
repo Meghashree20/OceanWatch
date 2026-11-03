@@ -1,10 +1,11 @@
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query
 
+from app.core.auth import require_active_user
 from app.schemas.forecast import ForecastMetricsResponse, ForecastResponse, ForecastTrainRequest, ForecastTrainResponse
 from app.services.forecast_service import ForecastService
 
 
-router = APIRouter()
+router = APIRouter(dependencies=[Depends(require_active_user)])
 
 
 @router.post("/train", response_model=ForecastTrainResponse, summary="Train the pollution forecast model")

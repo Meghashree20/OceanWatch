@@ -56,8 +56,8 @@ RECOMMENDATION = {
 
 
 @pytest_asyncio.fixture
-async def client():
-    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as async_client:
+async def client(authenticated_app):
+    async with AsyncClient(transport=ASGITransport(app=authenticated_app), base_url="http://test") as async_client:
         yield async_client
 
 

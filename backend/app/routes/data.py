@@ -1,13 +1,14 @@
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query
 from typing import Optional
 from datetime import datetime
 from pathlib import Path
 
+from app.core.auth import require_active_user
 from app.schemas.pollution import DataImportResponse, DataStatsResponse, PaginatedResponse, PollutionObservationResponse
 from app.services.data_service import DataService
 from app.core.dates import parse_date_range
 
-router = APIRouter()
+router = APIRouter(dependencies=[Depends(require_active_user)])
 
 @router.post("/import", response_model=DataImportResponse, summary="Import cleaned NOAA observations")
 async def import_data():
