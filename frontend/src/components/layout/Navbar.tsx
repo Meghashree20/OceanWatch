@@ -47,11 +47,8 @@ export function DashboardNavbar() {
   const navigate = useNavigate();
   const { user, status, logout } = useAuth();
   const handleLogout = async () => {
-    try {
-      await logout();
-    } finally {
-      navigate('/');
-    }
+    navigate('/', { replace: true });
+    await logout();
   };
 
   useEffect(() => {
@@ -344,11 +341,8 @@ function MobileNav() {
   const navigate = useNavigate();
   const { user, status, logout } = useAuth();
   const handleLogout = async () => {
-    try {
-      await logout();
-    } finally {
-      navigate('/');
-    }
+    navigate('/', { replace: true });
+    await logout();
   };
   const groups = [{ label: 'Platform', items: dashboardPlatformNavItems }];
 
