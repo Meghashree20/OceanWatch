@@ -34,6 +34,10 @@ logger = logging.getLogger(__name__)
 _BACKEND_ROOT = Path(__file__).resolve().parents[2]
 
 
+class SatelliteUnavailableError(RuntimeError):
+    """Raised when satellite inference cannot run in the current environment."""
+
+
 class SatelliteService:
     """Singleton service for MARIDA U-Net Sentinel-2 satellite analysis."""
 
@@ -75,19 +79,28 @@ class SatelliteService:
     def initialize(cls) -> None:
         """Load the U-Net model once during application startup."""
         if rasterio is None or torch is None or DebrisDetector is None:
-            raise RuntimeError(
+            raise SatelliteUnavailableError(
                 "Satellite analysis dependencies are unavailable; install rasterio and torch to enable it."
             )
         if cls._detector is None:
             model_path = _BACKEND_ROOT / settings.SATELLITE_MODEL_PATH
+            if not model_path.is_file():
+                raise SatelliteUnavailableError(
+                    f"Satellite model checkpoint is unavailable at {model_path}."
+                )
             logger.info(f"Initializing SatelliteService with model at {model_path}...")
-            cls._detector = DebrisDetector(
-                model_path=model_path,
-                input_bands=11,
-                output_classes=11,
-                hidden_channels=16,
-                device=settings.SATELLITE_DEVICE,
-            )
+            try:
+                cls._detector = DebrisDetector(
+                    model_path=model_path,
+                    input_bands=11,
+                    output_classes=11,
+                    hidden_channels=16,
+                    device=settings.SATELLITE_DEVICE,
+                )
+            except (OSError, RuntimeError, TypeError) as exc:
+                raise SatelliteUnavailableError(
+                    f"Satellite model could not be loaded: {exc}"
+                ) from exc
             logger.info("SatelliteService successfully initialized.")
 
     @classmethod
@@ -96,7 +109,7 @@ class SatelliteService:
         if cls._detector is None:
             cls.initialize()
         if cls._detector is None:
-            raise RuntimeError("Failed to initialize DebrisDetector.")
+            raise SatelliteUnavailableError("Satellite detector could not be initialized.")
         return cls._detector
 
     @classmethod
@@ -220,10 +233,10 @@ class SatelliteService:
     @classmethod
     def analyze_registered_hotspot(cls, hotspot_id: str) -> SatelliteAnalysisResponse:
         """Analyze a pre-registered coastal hotspot by ID."""
-        if rasterio is None:
-            raise RuntimeError("Satellite analysis dependencies are unavailable; install rasterio to enable it.")
         if hotspot_id not in cls.CATALOG:
             raise KeyError(f"Unknown hotspot ID: '{hotspot_id}'. Available: {list(cls.CATALOG.keys())}")
+        if rasterio is None:
+            raise SatelliteUnavailableError("Satellite analysis dependencies are unavailable; install rasterio to enable it.")
 
         hotspot = cls.CATALOG[hotspot_id]
         sample_path = _BACKEND_ROOT / hotspot["sample_file"]
@@ -249,7 +262,7 @@ class SatelliteService:
     ) -> SatelliteAnalysisResponse:
         """Analyze a user-uploaded Sentinel-2 GeoTIFF supplied as bytes."""
         if MemoryFile is None:
-            raise RuntimeError("Satellite analysis dependencies are unavailable; install rasterio to enable it.")
+            raise SatelliteUnavailableError("Satellite analysis dependencies are unavailable; install rasterio to enable it.")
         if not file_bytes:
             raise ValueError("Uploaded file payload is empty.")
 

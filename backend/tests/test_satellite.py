@@ -5,9 +5,10 @@ import pytest
 from starlette.testclient import TestClient
 
 from app.main import app
-from app.services.satellite_service import SatelliteService
+from app.services.satellite_service import SatelliteService, rasterio, torch
 
 SAMPLE_TIF = Path(__file__).resolve().parents[1] / "samples" / "accra-coast.tif"
+SATELLITE_AVAILABLE = rasterio is not None and torch is not None
 
 
 @pytest.fixture(scope="module")
@@ -30,6 +31,9 @@ def test_satellite_catalog(client):
 
 def test_analyze_registered_hotspot_via_post(client):
     response = client.post("/api/satellite/analyze", data={"hotspot_id": "accra-coast"})
+    if not SATELLITE_AVAILABLE:
+        assert response.status_code == 503
+        return
     assert response.status_code == 200
     data = response.json()
     assert data["id"] == "accra-coast"
@@ -43,6 +47,9 @@ def test_analyze_registered_hotspot_via_post(client):
 
 def test_analyze_registered_hotspot_by_id_endpoint(client):
     response = client.get("/api/satellite/hotspots/accra-coast/analyze")
+    if not SATELLITE_AVAILABLE:
+        assert response.status_code == 503
+        return
     assert response.status_code == 200
     data = response.json()
     assert data["id"] == "accra-coast"
@@ -58,6 +65,9 @@ def test_analyze_uploaded_geotiff(client):
         "/api/satellite/analyze",
         files={"file": ("accra-upload.tif", file_bytes, "image/tiff")},
     )
+    if not SATELLITE_AVAILABLE:
+        assert response.status_code == 503
+        return
     assert response.status_code == 200
     data = response.json()
     assert data["id"] == "custom-upload"
@@ -84,5 +94,8 @@ def test_analyze_invalid_file_returns_422(client):
         "/api/satellite/analyze",
         files={"file": ("fake.tif", fake_bytes, "image/tiff")},
     )
+    if not SATELLITE_AVAILABLE:
+        assert response.status_code == 503
+        return
     assert response.status_code == 422
     assert "Invalid or unreadable GeoTIFF" in response.json()["error"]["message"]

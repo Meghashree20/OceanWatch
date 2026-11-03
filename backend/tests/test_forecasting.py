@@ -110,7 +110,7 @@ def test_noaa_adapter_keeps_only_forecast_metric_unit():
     normalized = noaa_forecast_records(records)
 
     assert normalized == [{
-        "sample_date": pd.Timestamp("2020-01-15"),
+        "sample_date": pd.Timestamp("2020-01-15", tz="UTC"),
         "measurement": 4.0,
         "latitude": 10.0,
         "longitude": 20.0,

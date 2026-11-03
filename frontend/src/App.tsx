@@ -1,18 +1,21 @@
+import { lazy, Suspense } from 'react';
 import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom';
 import { ProtectedRoute } from '@/components/auth/ProtectedRoute';
 import { AuthPageLayout, DashboardLayout, PublicLayout } from '@/components/layout/PageShell';
 import { HomePage } from '@/pages/HomePage';
-import { HotspotsPage } from '@/pages/HotspotsPage';
-import { ForecastPage } from '@/pages/ForecastPage';
-import { PriorityPage } from '@/pages/PriorityPage';
-import { DataExplorerPage } from '@/pages/DataExplorerPage';
-import { IntelligencePage } from '@/pages/IntelligencePage';
-import { SatellitePage } from '@/pages/SatellitePage';
-import { PlatformPage, type PlatformPageConfig } from '@/pages/PlatformPage';
-import { DashboardFiltersProvider } from '@/lib/dashboardFilters';
+import { type PlatformPageConfig } from '@/pages/PlatformPage';
+import { DashboardFiltersProvider } from '@/lib/DashboardFiltersProvider';
 import { AuthProvider } from '@/lib/auth';
-import { LoginPage } from '@/pages/LoginPage';
-import { SignupPage } from '@/pages/SignupPage';
+
+const PlatformPage = lazy(() => import('@/pages/PlatformPage').then(({ PlatformPage: page }) => ({ default: page })));
+const HotspotsPage = lazy(() => import('@/pages/HotspotsPage').then(({ HotspotsPage: page }) => ({ default: page })));
+const ForecastPage = lazy(() => import('@/pages/ForecastPage').then(({ ForecastPage: page }) => ({ default: page })));
+const PriorityPage = lazy(() => import('@/pages/PriorityPage').then(({ PriorityPage: page }) => ({ default: page })));
+const DataExplorerPage = lazy(() => import('@/pages/DataExplorerPage').then(({ DataExplorerPage: page }) => ({ default: page })));
+const IntelligencePage = lazy(() => import('@/pages/IntelligencePage').then(({ IntelligencePage: page }) => ({ default: page })));
+const SatellitePage = lazy(() => import('@/pages/SatellitePage').then(({ SatellitePage: page }) => ({ default: page })));
+const LoginPage = lazy(() => import('@/pages/LoginPage').then(({ LoginPage: page }) => ({ default: page })));
+const SignupPage = lazy(() => import('@/pages/SignupPage').then(({ SignupPage: page }) => ({ default: page })));
 
 const pageConfigs: Record<string, PlatformPageConfig> = {
   explore: {
@@ -65,7 +68,8 @@ function App() {
     <BrowserRouter>
       <AuthProvider>
         <DashboardFiltersProvider>
-          <Routes>
+          <Suspense fallback={<div className="min-h-screen bg-slate-950" />}>
+            <Routes>
             <Route element={<PublicLayout />}>
               <Route path="/" element={<HomePage />} />
               <Route path="/about" element={<PlatformPage config={pageConfigs.about} />} />
@@ -87,7 +91,8 @@ function App() {
               </Route>
             </Route>
             <Route path="*" element={<Navigate to="/" replace />} />
-          </Routes>
+            </Routes>
+          </Suspense>
         </DashboardFiltersProvider>
       </AuthProvider>
     </BrowserRouter>

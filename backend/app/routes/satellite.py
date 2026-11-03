@@ -7,7 +7,7 @@ from fastapi import APIRouter, Depends, File, Form, HTTPException, Request, Uplo
 
 from app.core.auth import require_active_user
 from app.schemas.satellite import HotspotCatalogItem, SatelliteAnalysisResponse
-from app.services.satellite_service import SatelliteService
+from app.services.satellite_service import SatelliteService, SatelliteUnavailableError
 
 router = APIRouter(dependencies=[Depends(require_active_user)])
 
@@ -53,6 +53,8 @@ async def analyze_satellite(
             return SatelliteService.analyze_geotiff_bytes(file_bytes=file_bytes, site_name=file.filename)
         except ValueError as exc:
             raise HTTPException(status_code=422, detail=str(exc)) from exc
+        except SatelliteUnavailableError as exc:
+            raise HTTPException(status_code=503, detail=str(exc)) from exc
         except Exception as exc:
             raise HTTPException(status_code=500, detail=f"Satellite analysis failed: {exc}") from exc
 
@@ -66,6 +68,8 @@ async def analyze_satellite(
             raise HTTPException(status_code=404, detail=str(exc)) from exc
         except ValueError as exc:
             raise HTTPException(status_code=422, detail=str(exc)) from exc
+        except SatelliteUnavailableError as exc:
+            raise HTTPException(status_code=503, detail=str(exc)) from exc
         except Exception as exc:
             raise HTTPException(status_code=500, detail=f"Satellite analysis failed: {exc}") from exc
 
@@ -88,5 +92,7 @@ async def analyze_hotspot_by_id(hotspot_id: str):
         raise HTTPException(status_code=404, detail=str(exc)) from exc
     except ValueError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
+    except SatelliteUnavailableError as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
     except Exception as exc:
         raise HTTPException(status_code=500, detail=f"Satellite analysis failed: {exc}") from exc
