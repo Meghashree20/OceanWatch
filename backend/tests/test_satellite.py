@@ -34,6 +34,11 @@ def test_analyze_registered_hotspot_via_post(client):
     assert data["total_pixels"] == 256 * 256
     assert data["debris_pixel_count"] >= 0
     assert 0.0 <= data["debris_coverage_percentage"] <= 100.0
+    assert data["image_name"] == "samples/accra-coast.tif"
+    assert len(data["class_statistics"]) == 11
+    assert sum(item["pixel_count"] for item in data["class_statistics"]) == data["total_pixels"]
+    assert sum(item["class_id"] == 0 and item["class_name"] == "Marine Debris" for item in data["class_statistics"]) == 1
+    assert len(data["segmentation_mask_png_base64"]) > 100
     assert len(data["preview_png_base64"]) > 100
     assert len(data["overlay_png_base64"]) > 100
     assert data["raster_metadata"]["count"] == 11
@@ -61,6 +66,9 @@ def test_analyze_uploaded_geotiff(client):
     assert data["id"] == "custom-upload"
     assert data["total_pixels"] == 256 * 256
     assert data["debris_pixel_count"] >= 0
+    assert len(data["class_statistics"]) == 11
+    assert sum(item["pixel_count"] for item in data["class_statistics"]) == data["total_pixels"]
+    assert len(data["segmentation_mask_png_base64"]) > 100
     assert data["raster_metadata"]["count"] == 11
     assert data["preview_png_base64"]
     assert data["overlay_png_base64"]
@@ -84,3 +92,12 @@ def test_analyze_invalid_file_returns_422(client):
     )
     assert response.status_code == 422
     assert "Invalid or unreadable GeoTIFF" in response.json()["error"]["message"]
+
+
+def test_analyze_rejects_non_geotiff_extension(client):
+    response = client.post(
+        "/api/satellite/analyze",
+        files={"file": ("image.png", b"fake", "image/png")},
+    )
+    assert response.status_code == 422
+    assert "must be a .tif or .tiff" in response.json()["error"]["message"]

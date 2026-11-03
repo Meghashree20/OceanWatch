@@ -1,15 +1,17 @@
 from __future__ import annotations
 
-import json
+from pathlib import Path
 from typing import List, Optional
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Request, UploadFile
+from starlette.concurrency import run_in_threadpool
 
 from app.core.auth import require_active_user
 from app.schemas.satellite import HotspotCatalogItem, SatelliteAnalysisResponse
 from app.services.satellite_service import SatelliteService, SatelliteUnavailableError
 
 router = APIRouter(dependencies=[Depends(require_active_user)])
+MAX_UPLOAD_BYTES = 512 * 1024 * 1024
 
 
 @router.get("/catalog", response_model=List[HotspotCatalogItem], summary="Get pre-registered coastal monitoring sites")
@@ -47,21 +49,32 @@ async def analyze_satellite(
     # 2. Case A: Uploaded GeoTIFF
     if file is not None:
         try:
-            file_bytes = await file.read()
+            filename = file.filename or ""
+            if Path(filename).suffix.lower() not in {".tif", ".tiff"}:
+                raise HTTPException(status_code=422, detail="Upload must be a .tif or .tiff GeoTIFF file.")
+            file_bytes = await file.read(MAX_UPLOAD_BYTES + 1)
+            if len(file_bytes) > MAX_UPLOAD_BYTES:
+                raise HTTPException(status_code=413, detail="GeoTIFF upload exceeds the 512 MB limit.")
             if not file_bytes:
                 raise HTTPException(status_code=422, detail="Uploaded file is empty.")
-            return SatelliteService.analyze_geotiff_bytes(file_bytes=file_bytes, site_name=file.filename)
+            return await run_in_threadpool(
+                SatelliteService.analyze_geotiff_bytes,
+                file_bytes=file_bytes,
+                site_name=file.filename,
+            )
+        except HTTPException:
+            raise
         except ValueError as exc:
             raise HTTPException(status_code=422, detail=str(exc)) from exc
         except SatelliteUnavailableError as exc:
             raise HTTPException(status_code=503, detail=str(exc)) from exc
         except Exception as exc:
-            raise HTTPException(status_code=500, detail=f"Satellite analysis failed: {exc}") from exc
+            raise HTTPException(status_code=500, detail="Satellite analysis failed. Check the backend logs for details.") from exc
 
     # 3. Case B: Registered Hotspot ID
     if hotspot_id:
         try:
-            return SatelliteService.analyze_registered_hotspot(hotspot_id)
+            return await run_in_threadpool(SatelliteService.analyze_registered_hotspot, hotspot_id)
         except KeyError as exc:
             raise HTTPException(status_code=404, detail=str(exc)) from exc
         except FileNotFoundError as exc:
@@ -71,7 +84,7 @@ async def analyze_satellite(
         except SatelliteUnavailableError as exc:
             raise HTTPException(status_code=503, detail=str(exc)) from exc
         except Exception as exc:
-            raise HTTPException(status_code=500, detail=f"Satellite analysis failed: {exc}") from exc
+            raise HTTPException(status_code=500, detail="Satellite analysis failed. Check the backend logs for details.") from exc
 
     # Neither provided
     raise HTTPException(
@@ -85,7 +98,7 @@ async def analyze_satellite(
 async def analyze_hotspot_by_id(hotspot_id: str):
     """Convenience endpoint to analyze a pre-registered coastal monitoring site by its ID."""
     try:
-        return SatelliteService.analyze_registered_hotspot(hotspot_id)
+        return await run_in_threadpool(SatelliteService.analyze_registered_hotspot, hotspot_id)
     except KeyError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
     except FileNotFoundError as exc:

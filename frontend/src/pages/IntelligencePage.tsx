@@ -33,6 +33,7 @@ import { Button } from '@/components/ui/Button';
 import { Card, CardBody, CardHeader } from '@/components/ui/Card';
 import {
   oceanWatchApi,
+  getSavedRecommendationContext,
   type Hotspot,
   type PollutionObservation,
   type Recommendation,
@@ -116,7 +117,7 @@ export function IntelligencePage() {
     Promise.all([
       oceanWatchApi.getAllObservations(obsParams),
       oceanWatchApi.getHotspots(hotspotParams),
-      oceanWatchApi.getPriorityResults(100).catch(() => ({ data: [], total: 0 })),
+      oceanWatchApi.getPriorityResults(100, getSavedRecommendationContext()).catch(() => ({ data: [], total: 0 })),
     ])
       .then(([obsResponse, hotspotResponse, recResponse]) => {
         setObservations(obsResponse.data);
@@ -1362,6 +1363,61 @@ function GeographicHotspotMap({
   const lonToX = (lon: number) => ((lon + 180) / 360) * baseWidth;
   const latToY = (lat: number) => ((90 - lat) / 180) * baseHeight;
 
+  // Nearby centroids can put several large, numbered SVG markers on top of one
+  // another. Spread only the rendered markers into a small deterministic
+  // spiral, and draw a leader back to each real centroid so the map remains
+  // geographically honest. The details panel continues to report true values.
+  const positionedHotspots = useMemo(() => {
+    const placed: Array<{
+      hotspot: Hotspot;
+      x: number;
+      y: number;
+      anchorX: number;
+      anchorY: number;
+      radius: number;
+    }> = [];
+
+    const ordered = [...filteredHotspots].sort((a, b) =>
+      a.centroid.longitude - b.centroid.longitude || a.centroid.latitude - b.centroid.latitude || a.cluster_id - b.cluster_id
+    );
+
+    ordered.forEach((hotspot) => {
+      const anchorX = lonToX(hotspot.centroid.longitude);
+      const anchorY = latToY(hotspot.centroid.latitude);
+      const radius = Math.min(Math.max(Math.sqrt(hotspot.observation_count) * 2.8, 9), 28);
+      const candidates = [{ x: anchorX, y: anchorY }];
+
+      for (let distance = 18; distance <= 180; distance += 9) {
+        for (let angle = 0; angle < 16; angle += 1) {
+          const radians = (angle * Math.PI * 2) / 16;
+          candidates.push({
+            x: Math.max(radius + 2, Math.min(baseWidth - radius - 2, anchorX + Math.cos(radians) * distance)),
+            y: Math.max(radius + 2, Math.min(baseHeight - radius - 2, anchorY + Math.sin(radians) * distance)),
+          });
+        }
+      }
+
+      const position = candidates.find((candidate) =>
+        placed.every((other) =>
+          Math.hypot(candidate.x - other.x, candidate.y - other.y) >= radius + other.radius + 5
+        )
+      ) ?? candidates[candidates.length - 1];
+
+      placed.push({ hotspot, ...position, anchorX, anchorY, radius });
+    });
+
+    return placed;
+  }, [filteredHotspots]);
+
+  useEffect(() => {
+    if (selectedHotspot && !filteredHotspots.some((hotspot) => hotspot.cluster_id === selectedHotspot.cluster_id)) {
+      setSelectedHotspot(null);
+    }
+    if (hoveredHotspot && !filteredHotspots.some((hotspot) => hotspot.cluster_id === hoveredHotspot.cluster_id)) {
+      setHoveredHotspot(null);
+    }
+  }, [filteredHotspots, hoveredHotspot, selectedHotspot]);
+
   // Adaptive viewBox based on zoom and ocean filter
   const viewBox = useMemo(() => {
     if (mapZoom === 1 && selectedOcean === 'ALL') {
@@ -1595,14 +1651,10 @@ function GeographicHotspotMap({
               ))}
 
             {showClusters &&
-              filteredHotspots.map((hotspot) => {
-                const cx = lonToX(hotspot.centroid.longitude);
-                const cy = latToY(hotspot.centroid.latitude);
+              positionedHotspots.map(({ hotspot, x: cx, y: cy, anchorX, anchorY, radius }) => {
                 const isSelected = selectedHotspot?.cluster_id === hotspot.cluster_id;
                 const isHovered = hoveredHotspot?.cluster_id === hotspot.cluster_id;
                 const style = severityColors[hotspot.severity] ?? severityColors.LOW;
-
-                const radius = Math.min(Math.max(Math.sqrt(hotspot.observation_count) * 2.8, 9), 28);
 
                 return (
                   <g
@@ -1611,6 +1663,19 @@ function GeographicHotspotMap({
                     onMouseEnter={() => setHoveredHotspot(hotspot)}
                     onClick={() => setSelectedHotspot(hotspot)}
                   >
+                    {Math.hypot(cx - anchorX, cy - anchorY) > 1 && (
+                      <line
+                        x1={anchorX}
+                        y1={anchorY}
+                        x2={cx}
+                        y2={cy}
+                        stroke={style.stroke}
+                        strokeWidth="1"
+                        strokeDasharray="2 2"
+                        opacity="0.6"
+                        pointerEvents="none"
+                      />
+                    )}
                     {(hotspot.severity === 'CRITICAL' || isSelected || isHovered) && (
                       <circle
                         cx={cx}

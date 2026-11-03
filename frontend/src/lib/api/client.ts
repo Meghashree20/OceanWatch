@@ -109,13 +109,23 @@ export interface SatelliteCatalogItem {
 export interface SatelliteAnalysis {
   id: string;
   name: string;
+  image_name: string;
   coordinates: number[];
   description: string;
   sample_file: string | null;
   debris_pixel_count: number;
   total_pixels: number;
   debris_coverage_percentage: number;
+  predicted_classes: number[];
+  class_statistics: Array<{
+    class_id: number;
+    class_name: string;
+    color: string;
+    pixel_count: number;
+    percentage: number;
+  }>;
   preview_png_base64: string;
+  segmentation_mask_png_base64: string;
   overlay_png_base64: string;
   raster_metadata: SatelliteRasterMetadata | null;
   status: string;
@@ -178,6 +188,31 @@ export interface Recommendation {
 export interface RecommendationList {
   data: Recommendation[];
   total: number;
+}
+
+export interface RecommendationContext {
+  ecological_risk: number;
+  human_exposure: number;
+  cleanup_feasibility: number;
+}
+
+const RECOMMENDATION_CONTEXT_KEY = 'oceanwatch.recommendation-context';
+
+export function getSavedRecommendationContext(): RecommendationContext | undefined {
+  try {
+    const saved = localStorage.getItem(RECOMMENDATION_CONTEXT_KEY);
+    if (!saved) return undefined;
+    const parsed = JSON.parse(saved) as Partial<RecommendationContext>;
+    const fields: (keyof RecommendationContext)[] = ['ecological_risk', 'human_exposure', 'cleanup_feasibility'];
+    if (fields.some((field) => typeof parsed[field] !== 'number' || parsed[field]! < 0 || parsed[field]! > 100)) return undefined;
+    return parsed as RecommendationContext;
+  } catch {
+    return undefined;
+  }
+}
+
+export function saveRecommendationContext(context: RecommendationContext) {
+  localStorage.setItem(RECOMMENDATION_CONTEXT_KEY, JSON.stringify(context));
 }
 
 export class ApiClientError extends Error {
@@ -308,8 +343,11 @@ export class OceanWatchApiClient {
     return this.requestJson<Forecast>(this.withQuery(`/api/forecast/${encodeURIComponent(zoneId)}`, { horizon }), { signal: undefined });
   }
 
-  getPriorityResults(limit = 100) {
-    return this.requestJson<RecommendationList>(this.withQuery('/api/recommendations', { limit }), { signal: undefined });
+  getPriorityResults(
+    limit = 100,
+    context?: RecommendationContext,
+  ) {
+    return this.requestJson<RecommendationList>(this.withQuery('/api/recommendations', { limit, ...context }), { signal: undefined });
   }
 
   getModelMetrics() {

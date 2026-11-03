@@ -10,11 +10,12 @@ import {
   Target,
   Waves,
 } from 'lucide-react';
-import { useEffect, useState } from 'react';
+import { useEffect, useState, type FormEvent } from 'react';
 import { PageHeader } from '@/components/layout/PageShell';
 import { Badge } from '@/components/ui/Badge';
+import { Button } from '@/components/ui/Button';
 import { Card, CardBody, CardHeader } from '@/components/ui/Card';
-import { oceanWatchApi, type Recommendation } from '@/lib/api/client';
+import { getSavedRecommendationContext, oceanWatchApi, saveRecommendationContext, type Recommendation, type RecommendationContext } from '@/lib/api/client';
 import { useDashboardFilters } from '@/lib/dashboardFilters';
 
 export function PriorityPage() {
@@ -23,15 +24,45 @@ export function PriorityPage() {
   const [selected, setSelected] = useState<Recommendation | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [scoring, setScoring] = useState(false);
+  const [contextScores, setContextScores] = useState(() => {
+    const saved = getSavedRecommendationContext();
+    return {
+      ecological_risk: saved ? String(saved.ecological_risk) : '',
+      human_exposure: saved ? String(saved.human_exposure) : '',
+      cleanup_feasibility: saved ? String(saved.cleanup_feasibility) : '',
+    };
+  });
 
   useEffect(() => {
     let active = true;
-    oceanWatchApi.getPriorityResults()
+    oceanWatchApi.getPriorityResults(100, getSavedRecommendationContext())
       .then((response) => { if (active) { setRecommendations(response.data); setSelected(response.data[0] ?? null); } })
       .catch((requestError: Error) => { if (active) setError(requestError.message); })
       .finally(() => { if (active) setLoading(false); });
     return () => { active = false; };
   }, []);
+
+  async function calculatePriorities(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setScoring(true);
+    setError(null);
+    try {
+      const context: RecommendationContext = {
+        ecological_risk: Number(contextScores.ecological_risk),
+        human_exposure: Number(contextScores.human_exposure),
+        cleanup_feasibility: Number(contextScores.cleanup_feasibility),
+      };
+      const response = await oceanWatchApi.getPriorityResults(100, context);
+      saveRecommendationContext(context);
+      setRecommendations(response.data);
+      setSelected(response.data[0] ?? null);
+    } catch (requestError) {
+      setError(requestError instanceof Error ? requestError.message : 'Unable to calculate priority scores.');
+    } finally {
+      setScoring(false);
+    }
+  }
 
   const weights = selected?.weights ?? {};
   const scoringFactors = [
@@ -55,7 +86,7 @@ export function PriorityPage() {
         description="Rank pollution locations using transparent, explainable priority scoring."
       >
         <Badge variant="neutral" icon={<Info className="h-3.5 w-3.5" />}>
-          {loading ? 'Loading recommendation data' : error ? 'Recommendation data unavailable' : recommendations.length ? 'Backend recommendation results' : 'No recommendation results'}
+          {loading ? 'Loading recommendation data' : error ? 'Recommendation data unavailable' : recommendations.some((item) => item.priority_score !== null) ? 'Priorities calculated' : recommendations.length ? 'Context scores required' : 'No recommendation results'}
         </Badge>
       </PageHeader>
 
@@ -149,12 +180,42 @@ export function PriorityPage() {
                     </div>
                     <h2 className="text-base font-bold text-navy-950">Priority ranking</h2>
                   </div>
-                  <p className="mt-2 text-sm text-ocean-500">Locations and scores will populate from the connected scoring output.</p>
+                  <p className="mt-2 text-sm text-ocean-500">Enter validated contextual scores to calculate and rank cleanup priorities.</p>
                 </div>
-                <Badge variant="neutral">Awaiting data</Badge>
+                <Badge variant="neutral">{recommendations.some((item) => item.priority_score !== null) ? 'Scores calculated' : 'Context required'}</Badge>
               </div>
             </CardHeader>
             <CardBody>
+              <form onSubmit={calculatePriorities} className="mb-6 rounded-xl border border-ocean-200 bg-ocean-50 p-4">
+                <p className="text-sm font-semibold text-navy-900">Contextual inputs (0–100)</p>
+                <p className="mt-1 text-xs leading-5 text-ocean-600">Use validated domain assessments. These values are applied uniformly to all listed hotspots; they are not inferred from NOAA observations.</p>
+                <div className="mt-4 grid gap-3 sm:grid-cols-3">
+                  {([
+                    ['ecological_risk', 'Ecological risk'],
+                    ['human_exposure', 'Human exposure'],
+                    ['cleanup_feasibility', 'Cleanup feasibility'],
+                  ] as const).map(([key, label]) => (
+                    <label key={key} className="text-xs font-medium text-navy-800">
+                      {label}
+                      <input
+                        aria-label={label}
+                        type="number"
+                        min="0"
+                        max="100"
+                        step="0.1"
+                        required
+                        value={contextScores[key]}
+                        onChange={(event) => setContextScores((current) => ({ ...current, [key]: event.target.value }))}
+                        className="mt-1.5 w-full rounded-lg border border-ocean-200 bg-white px-3 py-2 text-sm text-navy-900 outline-none focus:border-cyan-500 focus:ring-2 focus:ring-cyan-100"
+                      />
+                    </label>
+                  ))}
+                </div>
+                <div className="mt-4 flex flex-wrap items-center gap-3">
+                  <Button type="submit" disabled={scoring}>{scoring ? 'Calculating…' : 'Calculate priorities'}</Button>
+                  {error && <span role="alert" className="text-xs text-red-700">{error}</span>}
+                </div>
+              </form>
               <div className="overflow-x-auto">
                 <table className="w-full min-w-[920px] text-left text-sm">
                   <thead>

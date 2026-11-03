@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { AlertCircle, CheckCircle2, FileImage, Image as ImageIcon, LoaderCircle, Satellite, Upload, Waves } from 'lucide-react';
+import { AlertCircle, CheckCircle2, Download, FileImage, Image as ImageIcon, LoaderCircle, Satellite, Upload, Waves } from 'lucide-react';
 import { PageHeader } from '@/components/layout/PageShell';
 import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
@@ -21,7 +21,8 @@ export function SatellitePage() {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [catalog, setCatalog] = useState<SatelliteCatalogItem[]>([]);
   const [analysis, setAnalysis] = useState<SatelliteAnalysis | null>(null);
-  const [selectedFileName, setSelectedFileName] = useState<string | null>(null);
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [dragging, setDragging] = useState(false);
   const [loading, setLoading] = useState(false);
   const [catalogLoading, setCatalogLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -35,7 +36,7 @@ export function SatellitePage() {
     return () => { active = false; };
   }, []);
 
-  const analyzeFile = (file: File) => {
+  const selectFile = (file: File) => {
     if (!isGeoTiff(file)) {
       setError('Please choose an 11-band GeoTIFF file with a .tif or .tiff extension.');
       return;
@@ -44,18 +45,22 @@ export function SatellitePage() {
       setError('The selected GeoTIFF file is empty.');
       return;
     }
-    setSelectedFileName(file.name);
+    setSelectedFile(file);
     setAnalysis(null);
     setError(null);
+  };
+
+  const analyzeFile = () => {
+    if (!selectedFile) return;
+    setError(null);
     setLoading(true);
-    oceanWatchApi.analyzeSatellite(file)
+    oceanWatchApi.analyzeSatellite(selectedFile)
       .then(setAnalysis)
       .catch((requestError: Error) => setError(requestError.message))
       .finally(() => setLoading(false));
   };
 
   const analyzeCatalogItem = (item: SatelliteCatalogItem) => {
-    setSelectedFileName(item.sample_file);
     setAnalysis(null);
     setError(null);
     setLoading(true);
@@ -93,20 +98,34 @@ export function SatellitePage() {
                 className="sr-only"
                 onChange={(event) => {
                   const file = event.target.files?.[0];
-                  if (file) analyzeFile(file);
+                  if (file) selectFile(file);
                   event.target.value = '';
                 }}
               />
-              <button
-                type="button"
+              <div
+                role="button"
+                tabIndex={0}
                 onClick={() => fileInputRef.current?.click()}
-                className="flex w-full flex-col items-center justify-center rounded-xl border-2 border-dashed border-ocean-200 bg-ocean-50 px-5 py-10 text-center transition-colors hover:border-cyan-400 hover:bg-cyan-50"
+                onKeyDown={(event) => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); fileInputRef.current?.click(); } }}
+                onDragEnter={(event) => { event.preventDefault(); setDragging(true); }}
+                onDragOver={(event) => { event.preventDefault(); setDragging(true); }}
+                onDragLeave={(event) => { if (!event.currentTarget.contains(event.relatedTarget as Node | null)) setDragging(false); }}
+                onDrop={(event) => { event.preventDefault(); setDragging(false); const file = event.dataTransfer.files[0]; if (file) selectFile(file); }}
+                className={`flex w-full cursor-pointer flex-col items-center justify-center rounded-xl border-2 border-dashed px-5 py-10 text-center transition-colors focus:outline-none focus:ring-2 focus:ring-cyan-400 ${dragging ? 'border-cyan-500 bg-cyan-50' : 'border-ocean-200 bg-ocean-50 hover:border-cyan-400 hover:bg-cyan-50'}`}
               >
                 <FileImage className="h-8 w-8 text-cyan-600" />
-                <span className="mt-3 text-sm font-semibold text-navy-900">Choose a GeoTIFF file</span>
+                <span className="mt-3 text-sm font-semibold text-navy-900">Drop a GeoTIFF here or browse</span>
                 <span className="mt-1 text-xs text-ocean-500">.tif or .tiff · exactly 11 spectral bands</span>
-              </button>
-              {selectedFileName && <p className="mt-3 truncate text-xs text-ocean-500">Selected: <span className="font-medium text-navy-800">{selectedFileName}</span></p>}
+              </div>
+              {selectedFile && (
+                <div className="mt-3 rounded-lg border border-ocean-100 bg-white p-3 text-xs">
+                  <p className="truncate font-semibold text-navy-900">{selectedFile.name}</p>
+                  <p className="mt-1 text-ocean-500">{(selectedFile.size / (1024 * 1024)).toFixed(2)} MB · {selectedFile.type || 'GeoTIFF image'} · Ready to analyze</p>
+                </div>
+              )}
+              <Button className="mt-4 w-full" disabled={!selectedFile || loading} onClick={analyzeFile}>
+                {loading ? <><LoaderCircle className="h-4 w-4 animate-spin" /> Analyzing…</> : <><Satellite className="h-4 w-4" /> Analyze Satellite Image</>}
+              </Button>
 
               <div className="mt-6 border-t border-ocean-100 pt-5">
                 <div className="flex items-center gap-2">
@@ -180,6 +199,7 @@ export function SatellitePage() {
 
 function AnalysisResult({ analysis }: { analysis: SatelliteAnalysis }) {
   const metadata = analysis.raster_metadata;
+  const outputName = analysis.image_name.replace(/\.(tif|tiff)$/i, '') || 'satellite-segmentation';
   return (
     <div className="space-y-5">
       <div className="grid gap-3 sm:grid-cols-3">
@@ -191,10 +211,42 @@ function AnalysisResult({ analysis }: { analysis: SatelliteAnalysis }) {
         <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0" />
         <span><strong>{analysis.name}</strong> · {analysis.description}</span>
       </div>
-      <div className="grid gap-4 md:grid-cols-2">
-        <ImagePanel title="Satellite preview" src={imageDataUrl(analysis.preview_png_base64)} />
-        <ImagePanel title="U-Net debris segmentation mask / overlay" src={imageDataUrl(analysis.overlay_png_base64)} overlay />
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div>
+          <h3 className="text-sm font-bold text-navy-950">Original versus segmentation</h3>
+          <p className="mt-1 text-xs text-ocean-500">Predictions are generated by the backend U-Net for each pixel.</p>
+        </div>
+        <a href={imageDataUrl(analysis.segmentation_mask_png_base64)} download={`${outputName}-segmentation.png`} className="inline-flex items-center gap-2 rounded-lg border border-ocean-200 bg-white px-3 py-2 text-xs font-semibold text-navy-800 transition hover:border-cyan-400 hover:text-cyan-700">
+          <Download className="h-4 w-4" /> Download segmentation PNG
+        </a>
       </div>
+      <div className="grid gap-4 xl:grid-cols-3">
+        <ImagePanel title="Satellite preview" src={imageDataUrl(analysis.preview_png_base64)} />
+        <ImagePanel title="Predicted class mask" src={imageDataUrl(analysis.segmentation_mask_png_base64)} overlay />
+        <ImagePanel title="Class overlay on original" src={imageDataUrl(analysis.overlay_png_base64)} overlay />
+      </div>
+      <section className="border-t border-ocean-100 pt-4" aria-labelledby="class-statistics-heading">
+        <div className="flex items-baseline justify-between gap-3">
+          <h3 id="class-statistics-heading" className="text-sm font-bold text-navy-950">MARIDA class distribution</h3>
+          <span className="text-[11px] text-ocean-500">{analysis.predicted_classes.length} classes present · {analysis.total_pixels.toLocaleString()} pixels</span>
+        </div>
+        <div className="mt-4 space-y-3">
+          {analysis.class_statistics.map((item) => (
+            <div key={item.class_id}>
+              <div className="mb-1 flex items-center justify-between gap-3 text-xs">
+                <span className="flex min-w-0 items-center gap-2 font-medium text-navy-800">
+                  <span className="h-3 w-3 shrink-0 rounded-sm border border-black/10" style={{ backgroundColor: item.color }} />
+                  <span className="truncate">{item.class_name}</span>
+                </span>
+                <span className="shrink-0 font-mono text-ocean-600">{item.pixel_count.toLocaleString()} · {item.percentage.toFixed(2)}%</span>
+              </div>
+              <div className="h-2 overflow-hidden rounded-full bg-ocean-100">
+                <div className="h-full rounded-full" style={{ width: `${item.percentage}%`, backgroundColor: item.color }} />
+              </div>
+            </div>
+          ))}
+        </div>
+      </section>
       {metadata && (
         <dl className="grid gap-3 border-t border-ocean-100 pt-4 text-xs sm:grid-cols-3">
           <Metadata label="Raster size" value={`${metadata.width} × ${metadata.height}`} />
