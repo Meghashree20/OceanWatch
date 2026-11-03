@@ -33,6 +33,22 @@ logger = logging.getLogger(__name__)
 # Backend base directory
 _BACKEND_ROOT = Path(__file__).resolve().parents[2]
 
+# MARIDA's 15 source labels are consolidated to 11 segmentation labels. The
+# model's existing pipeline assigns index 0 to Marine Debris.
+MARIDA_CLASSES = (
+    ("Marine Debris", "#ef4444"),
+    ("Dense Sargassum", "#f97316"),
+    ("Sparse Sargassum", "#eab308"),
+    ("Natural Organic Material", "#a855f7"),
+    ("Ship", "#ec4899"),
+    ("Clouds", "#e2e8f0"),
+    ("Marine Water", "#2563eb"),
+    ("Sediment-Laden Water", "#92400e"),
+    ("Foam", "#f8fafc"),
+    ("Turbid Water", "#14b8a6"),
+    ("Shallow Water", "#22c55e"),
+)
+
 
 class SatelliteUnavailableError(RuntimeError):
     """Raised when satellite inference cannot run in the current environment."""
@@ -90,12 +106,16 @@ class SatelliteService:
                 )
             logger.info(f"Initializing SatelliteService with model at {model_path}...")
             try:
+                device = settings.SATELLITE_DEVICE
+                if device.startswith("cuda") and not torch.cuda.is_available():
+                    logger.warning("Configured CUDA device is unavailable; using CPU inference.")
+                    device = "cpu"
                 cls._detector = DebrisDetector(
                     model_path=model_path,
                     input_bands=11,
                     output_classes=11,
                     hidden_channels=16,
-                    device=settings.SATELLITE_DEVICE,
+                    device=device,
                 )
             except (OSError, RuntimeError, TypeError) as exc:
                 raise SatelliteUnavailableError(
@@ -211,21 +231,45 @@ class SatelliteService:
         debris_pixels = int(debris_mask.sum())
         coverage_pct = round((debris_pixels / total_pixels) * 100.0, 4) if total_pixels > 0 else 0.0
 
-        # Highlight overlay (red with full opacity)
-        overlay_rgba = np.zeros((*mask.shape, 4), dtype=np.uint8)
-        overlay_rgba[debris_mask] = [255, 0, 0, 255]
+        # Fixed MARIDA palette: the mask remains a class-index raster while the
+        # overlay blends every predicted class over the true-color preview.
+        palette = np.asarray([
+            [int(color[index:index + 2], 16) for index in (1, 3, 5)]
+            for _, color in MARIDA_CLASSES
+        ], dtype=np.uint8)
+        class_rgb = palette[mask]
+        overlay_rgb = np.clip(
+            preview_rgb.astype(np.float32) * 0.48 + class_rgb.astype(np.float32) * 0.52,
+            0,
+            255,
+        ).astype(np.uint8)
+        mask_rgb = class_rgb.astype(np.uint8)
+        class_statistics = []
+        for class_id, (class_name, color) in enumerate(MARIDA_CLASSES):
+            pixel_count = int((mask == class_id).sum())
+            class_statistics.append({
+                "class_id": class_id,
+                "class_name": class_name,
+                "color": color,
+                "pixel_count": pixel_count,
+                "percentage": round((pixel_count / total_pixels) * 100.0, 4) if total_pixels else 0.0,
+            })
 
         return SatelliteAnalysisResponse(
             id=site_info["id"],
             name=site_info["name"],
+            image_name=site_info.get("image_name") or site_info.get("sample_file") or site_info["name"],
             coordinates=site_info["coordinates"],
             description=site_info.get("description", "Sentinel-2 GeoTIFF Analysis"),
             sample_file=site_info.get("sample_file"),
             debris_pixel_count=debris_pixels,
             total_pixels=total_pixels,
             debris_coverage_percentage=coverage_pct,
+            predicted_classes=[item["class_id"] for item in class_statistics if item["pixel_count"] > 0],
+            class_statistics=class_statistics,
             preview_png_base64=cls._encode_png(preview_rgb, "RGB"),
-            overlay_png_base64=cls._encode_png(overlay_rgba, "RGBA"),
+            segmentation_mask_png_base64=cls._encode_png(mask_rgb, "RGB"),
+            overlay_png_base64=cls._encode_png(overlay_rgb, "RGB"),
             raster_metadata=meta,
             status="success",
         )
@@ -287,6 +331,7 @@ class SatelliteService:
         custom_site = {
             "id": "custom-upload",
             "name": site_name or "Custom Ingested Patch",
+            "image_name": site_name or "uploaded-image.tif",
             "coordinates": coords,
             "description": "User-uploaded Sentinel-2 L2A 11-band GeoTIFF patch.",
             "sample_file": None,

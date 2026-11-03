@@ -109,13 +109,23 @@ export interface SatelliteCatalogItem {
 export interface SatelliteAnalysis {
   id: string;
   name: string;
+  image_name: string;
   coordinates: number[];
   description: string;
   sample_file: string | null;
   debris_pixel_count: number;
   total_pixels: number;
   debris_coverage_percentage: number;
+  predicted_classes: number[];
+  class_statistics: Array<{
+    class_id: number;
+    class_name: string;
+    color: string;
+    pixel_count: number;
+    percentage: number;
+  }>;
   preview_png_base64: string;
+  segmentation_mask_png_base64: string;
   overlay_png_base64: string;
   raster_metadata: SatelliteRasterMetadata | null;
   status: string;

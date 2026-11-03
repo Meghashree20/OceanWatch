@@ -49,25 +49,25 @@ export const platformNavItems: NavItem[] = [
   navItems[3], // Forecast
   navItems[4], // Priority
   navItems[5], // Intelligence
-  navItems[9], // Satellite
+  navItems[6], // Satellite
 ];
 
-export const dashboardPlatformNavItems: NavItem[] = platformNavItems.slice(0, 5);
+export const dashboardPlatformNavItems: NavItem[] = platformNavItems;
 
 export const secondaryNavItems: NavItem[] = [
-  navItems[6], // Data
-  navItems[7], // Models
-  navItems[8], // About
+  navItems[7], // Data
+  navItems[8], // Models
+  navItems[9], // About
 ];
 
 // Mobile nav groups
 export const mobileNavGroups: NavGroup[] = [
   { label: 'Platform', items: [navItems[0], ...platformNavItems] },
-  { label: 'Insights', items: [navItems[6], navItems[7], navItems[9]] },
-  { label: 'Project', items: [navItems[8]] },
+  { label: 'Insights', items: [navItems[7], navItems[8]] },
+  { label: 'Project', items: [navItems[9]] },
 ];
 
-export const publicNavItems: NavItem[] = [navItems[0], navItems[8]];
+export const publicNavItems: NavItem[] = [navItems[0], navItems[9]];
 
 export const footerNavGroups: NavGroup[] = [
   {
@@ -76,18 +76,18 @@ export const footerNavGroups: NavGroup[] = [
   },
   {
     label: 'Insights',
-    items: [navItems[6], navItems[7], navItems[9]],
+    items: [navItems[7], navItems[8]],
   },
   {
     label: 'Project',
-    items: [navItems[0], navItems[8]],
+    items: [navItems[0], navItems[9]],
   },
 ];
 
 export const publicFooterNavGroups: NavGroup[] = [
   {
     label: 'Project',
-    items: [navItems[0], navItems[8]],
+    items: [navItems[0], navItems[9]],
   },
 ];
 
