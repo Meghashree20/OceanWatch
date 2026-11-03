@@ -29,8 +29,7 @@ export function HomePage() {
     <div>
       <HeroSection />
       <WhyOceanWatchSection />
-      <CapabilitiesSection />
-      <WorkflowSection />
+      {/* Detailed capability and workflow content remains available in the dedicated pages. */}
       <ImpactSection />
       <FinalCtaSection />
     </div>
@@ -246,18 +245,6 @@ function HeroVisualization() {
         </div>
       </div>
 
-      {/* Floating side card — model status */}
-      <div className="absolute -bottom-4 -left-3 hidden rounded-xl border border-ocean-700/70 bg-navy-900 px-4 py-3 shadow-xl sm:block">
-        <div className="flex items-center gap-3">
-          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-teal-500/15">
-            <Radar className="h-4 w-4 text-teal-400" />
-          </div>
-          <div>
-            <p className="font-mono text-sm text-white">3 modules active</p>
-            <p className="text-[10px] text-ocean-400">Intelligence pipeline</p>
-          </div>
-        </div>
-      </div>
     </div>
   );
 }
@@ -320,6 +307,8 @@ function WhyOceanWatchSection() {
 /* 3. CAPABILITIES                                                     */
 /* ------------------------------------------------------------------ */
 
+// Kept as reusable capability content for dedicated views; not rendered on the landing page.
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
 function CapabilitiesSection() {
   return (
     <section className="bg-ocean-50">
@@ -545,6 +534,8 @@ function PriorityVisual() {
 /* 4. WORKFLOW                                                         */
 /* ------------------------------------------------------------------ */
 
+// Kept as reusable workflow content for dedicated views; not rendered on the landing page.
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
 function WorkflowSection() {
   const steps = [
     { icon: Database, title: 'Data', text: 'Marine observations collected' },

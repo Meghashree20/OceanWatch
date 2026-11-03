@@ -236,8 +236,6 @@ export function HotspotsPage() {
         {/* Legend */}
         <MapLegend />
 
-        {/* DBSCAN explanation */}
-        <DbscanExplanation />
       </div>
     </div>
   );
@@ -772,6 +770,8 @@ function MapLegend() {
 /* DBSCAN explanation                                                    */
 /* ------------------------------------------------------------------ */
 
+// Methodology remains documented in source while the long explanation is omitted from the main view.
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
 function DbscanExplanation() {
   const concepts = [
     {

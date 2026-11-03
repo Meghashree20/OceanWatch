@@ -19,7 +19,6 @@ import { useDashboardFilters } from '@/lib/dashboardFilters';
 
 const performanceItems = [
   { label: 'MAE', description: 'Mean absolute error' },
-  { label: 'MSE', description: 'Mean squared error' },
   { label: 'RMSE', description: 'Root mean squared error' },
   { label: 'R²', description: 'Coefficient of determination' },
 ];
@@ -83,14 +82,16 @@ export function ForecastPage() {
   const latestObserved = forecast?.historical_values[forecast.historical_values.length - 1]?.value;
   const latestForecast = forecast?.predicted_values[forecast.predicted_values.length - 1]?.value;
   const change = latestObserved && latestForecast ? ((latestForecast - latestObserved) / latestObserved) * 100 : null;
+  const evaluationMetrics = getXgboostMetrics(forecast?.model_metrics ?? metrics?.metrics);
+  const usesXgboost = Boolean(forecast && !forecast.message.toLowerCase().includes('persistence baseline'));
 
   return (
     <div>
       <PageHeader
         title="Pollution Forecast"
-        description="Review historical pollution patterns and prepare for future concentration estimates from the XGBoost forecasting model."
+        description="Review historical pollution patterns and prepare for future concentration estimates from the backend forecasting model."
       >
-          <Badge variant="neutral">{metrics ? 'XGBoost regression · model ready' : metricsError ? 'XGBoost metrics unavailable' : 'Loading model status'}</Badge>
+          <Badge variant="neutral">{metrics ? 'Model ready' : metricsError ? 'Model metrics unavailable' : 'Loading model status'}</Badge>
       </PageHeader>
 
       <div className="container-page py-10 lg:py-14">
@@ -181,21 +182,23 @@ export function ForecastPage() {
                   </div>
                   <h2 className="text-base font-bold text-navy-950">Model performance</h2>
                 </div>
-                <Badge variant="neutral">Pending evaluation</Badge>
+                <Badge variant={evaluationMetrics ? 'cyan' : 'neutral'}>{evaluationMetrics ? 'Validated evaluation' : 'Evaluation unavailable'}</Badge>
               </div>
             </CardHeader>
             <CardBody>
               <div className="grid grid-cols-2 gap-3">
                 {performanceItems.map(({ label, description }) => (
                   <div key={label} className="border-l-2 border-cyan-200 pl-3">
-                    <p className="font-display text-2xl font-bold text-navy-950">{metricValue(forecast?.model_metrics ?? metrics?.metrics, label) ?? '—'}</p>
+                    <p className="font-display text-2xl font-bold text-navy-950">{metricValue(evaluationMetrics, label) ?? '—'}</p>
                     <p className="mt-1 text-sm font-semibold text-navy-800">{label}</p>
                     <p className="mt-1 text-[11px] leading-4 text-ocean-500">{description}</p>
                   </div>
                 ))}
               </div>
               <p className="mt-6 border-t border-ocean-100 pt-4 text-xs leading-5 text-ocean-500">
-                Metrics will be populated from the validated model evaluation output. No performance values are estimated here.
+                {evaluationMetrics
+                  ? 'Metrics are reported by the backend model evaluation output and are not estimates.'
+                  : 'The API did not provide genuine XGBoost evaluation metrics for this model output.'}
               </p>
             </CardBody>
           </Card>
@@ -211,7 +214,7 @@ export function ForecastPage() {
             </CardHeader>
             <CardBody>
               <div className="space-y-4">
-                <p className="text-sm leading-6 text-ocean-500">The forecasting endpoint exposes predictions and aggregate model metrics, but does not expose feature-importance values. This section is therefore unavailable without inventing results.</p>
+                <p className="text-sm leading-6 text-ocean-500">The forecasting endpoint exposes predictions and evaluation metrics, but does not expose feature-importance values or confidence intervals. Those values are not fabricated here.</p>
               </div>
               <p className="mt-5 text-xs leading-5 text-ocean-500">Relative importance values will be supplied by the fitted XGBoost model.</p>
             </CardBody>
@@ -226,9 +229,9 @@ export function ForecastPage() {
               </div>
               <div>
                 <p className="text-xs font-semibold uppercase tracking-wider text-cyan-300">Model workflow</p>
-                <h2 className="mt-2 text-2xl font-bold text-white">How XGBoost Forecasting Works</h2>
+                <h2 className="mt-2 text-2xl font-bold text-white">How the forecast is produced</h2>
                 <div className="mt-6 flex flex-wrap items-center gap-2 text-sm font-medium text-ocean-100">
-                  {['Historical observations', 'Temporal aggregation', 'Feature engineering', 'XGBoost', 'Forecast'].map((step, index, steps) => (
+                  {['Historical observations', 'Temporal aggregation', 'Feature engineering', usesXgboost ? 'XGBoost' : 'Persistence baseline', 'Forecast'].map((step, index, steps) => (
                     <span key={step} className="flex items-center gap-2">
                       <span className="rounded-lg border border-ocean-700 bg-ocean-900 px-3 py-2">{step}</span>
                       {index < steps.length - 1 && <span className="text-cyan-300" aria-hidden="true">→</span>}
@@ -244,7 +247,12 @@ export function ForecastPage() {
   );
 }
 
-function metricValue(metrics: Record<string, unknown> | null | undefined, label: string) {
+function getXgboostMetrics(metrics: Record<string, unknown> | null | undefined) {
+  if (!metrics || typeof metrics.xgboost !== 'object' || metrics.xgboost === null) return null;
+  return metrics.xgboost as Record<string, unknown>;
+}
+
+function metricValue(metrics: Record<string, unknown> | null, label: string) {
   if (!metrics) return null;
   const key = label === 'R²' ? 'r2' : label.toLowerCase();
   const value = metrics[key] ?? metrics[label];
@@ -289,8 +297,13 @@ function ForecastChart({ forecast, error }: { forecast: Forecast | null; error: 
     const y = 92 - ((point.value - minValue) / valueRange) * 78;
     return `${x},${y}`;
   };
-  const historicalPath = visiblePoints.filter((point) => point.series === 'historical').map((point) => toPoint(point, visiblePoints.indexOf(point))).join(' ');
-  const predictedPath = visiblePoints.filter((point) => point.series === 'predicted').map((point) => toPoint(point, visiblePoints.indexOf(point))).join(' ');
+  const historicalPoints = visiblePoints.filter((point) => point.series === 'historical');
+  const predictedPoints = visiblePoints.filter((point) => point.series === 'predicted');
+  const historicalPath = historicalPoints.map((point) => toPoint(point, visiblePoints.indexOf(point))).join(' ');
+  const predictedPath = [
+    ...(historicalPoints.length > 0 && predictedPoints.length > 0 ? [historicalPoints[historicalPoints.length - 1]] : []),
+    ...predictedPoints,
+  ].map((point) => toPoint(point, visiblePoints.indexOf(point))).join(' ');
   const hovered = hoveredPoint === null ? null : visiblePoints[hoveredPoint] ?? null;
   const selected = selectedPoint === null ? null : visiblePoints[selectedPoint] ?? null;
   const reset = () => {
@@ -438,7 +451,13 @@ function ForecastChart({ forecast, error }: { forecast: Forecast | null; error: 
         <div className="relative z-10 flex flex-wrap gap-2 text-[11px] text-ocean-600">
           <button type="button" onClick={() => setShowHistorical((value) => !value)} className={`flex items-center gap-1.5 rounded px-1.5 py-1 ${showHistorical ? '' : 'opacity-40 line-through'}`}><span className="h-1.5 w-5 rounded-full bg-ocean-700" />Actual pollution</button>
           <button type="button" onClick={() => setShowPredicted((value) => !value)} className={`flex items-center gap-1.5 rounded px-1.5 py-1 ${showPredicted ? '' : 'opacity-40 line-through'}`}><span className="h-1.5 w-5 rounded-full border-t-2 border-dashed border-cyan-500" />Predicted pollution</button>
+          <span className="ml-auto text-[10px] text-ocean-400">Hover a point for date and value</span>
         </div>
+      )}
+      {forecast && forecast.message.toLowerCase().includes('persistence baseline') && (
+        <p className="relative z-10 mt-2 rounded border border-amber-200 bg-amber-50 px-2 py-1.5 text-[11px] leading-4 text-amber-900">
+          This zone is shown with a persistence baseline because the backend did not find sufficient regional XGBoost reliability. The values are not an XGBoost forecast.
+        </p>
       )}
       {(hovered || selected) && (
         <div className="relative z-10 mt-2 rounded-lg border border-navy-700 bg-navy-950 px-3 py-2 text-xs text-white shadow-lg">
