@@ -10,12 +10,22 @@ from typing import Any, Dict, List, Optional, Union
 
 import numpy as np
 from PIL import Image
-import rasterio
-from rasterio.io import MemoryFile
-import torch
+try:
+    import rasterio
+    from rasterio.io import MemoryFile
+except ModuleNotFoundError:
+    rasterio = None
+    MemoryFile = None
+try:
+    import torch
+except ModuleNotFoundError:
+    torch = None
 
 from app.core.config import settings
-from app.ml.satellite.detector import DebrisDetector
+try:
+    from app.ml.satellite.detector import DebrisDetector
+except ModuleNotFoundError:
+    DebrisDetector = None
 from app.schemas.satellite import HotspotCatalogItem, SatelliteAnalysisResponse, SatelliteRasterMetadata
 
 logger = logging.getLogger(__name__)
@@ -64,6 +74,10 @@ class SatelliteService:
     @classmethod
     def initialize(cls) -> None:
         """Load the U-Net model once during application startup."""
+        if rasterio is None or torch is None or DebrisDetector is None:
+            raise RuntimeError(
+                "Satellite analysis dependencies are unavailable; install rasterio and torch to enable it."
+            )
         if cls._detector is None:
             model_path = _BACKEND_ROOT / settings.SATELLITE_MODEL_PATH
             logger.info(f"Initializing SatelliteService with model at {model_path}...")
@@ -124,7 +138,7 @@ class SatelliteService:
         return base64.b64encode(buffer.getvalue()).decode("ascii")
 
     @classmethod
-    def _validate_and_read_dataset(cls, dataset: rasterio.DatasetReader) -> tuple[np.ndarray, SatelliteRasterMetadata]:
+    def _validate_and_read_dataset(cls, dataset: Any) -> tuple[np.ndarray, SatelliteRasterMetadata]:
         """Validate raster structure, band count, dimensions, and numeric values."""
         if dataset.count != 11:
             raise ValueError(
@@ -206,6 +220,8 @@ class SatelliteService:
     @classmethod
     def analyze_registered_hotspot(cls, hotspot_id: str) -> SatelliteAnalysisResponse:
         """Analyze a pre-registered coastal hotspot by ID."""
+        if rasterio is None:
+            raise RuntimeError("Satellite analysis dependencies are unavailable; install rasterio to enable it.")
         if hotspot_id not in cls.CATALOG:
             raise KeyError(f"Unknown hotspot ID: '{hotspot_id}'. Available: {list(cls.CATALOG.keys())}")
 
@@ -232,6 +248,8 @@ class SatelliteService:
         coordinates: Optional[List[float]] = None,
     ) -> SatelliteAnalysisResponse:
         """Analyze a user-uploaded Sentinel-2 GeoTIFF supplied as bytes."""
+        if MemoryFile is None:
+            raise RuntimeError("Satellite analysis dependencies are unavailable; install rasterio to enable it.")
         if not file_bytes:
             raise ValueError("Uploaded file payload is empty.")
 
@@ -261,4 +279,3 @@ class SatelliteService:
             "sample_file": None,
         }
         return cls._execute_analysis(bands, meta, custom_site)
-

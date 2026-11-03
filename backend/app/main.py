@@ -24,8 +24,11 @@ OPENAPI_TAGS = [
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     # Startup: connect to MongoDB, create indexes, and load U-Net ONCE
-    await connect_to_mongo()
-    await create_indexes()
+    try:
+        await connect_to_mongo()
+        await create_indexes()
+    except RuntimeError as exc:
+        logger.warning(f"MongoDB startup unavailable; health endpoints remain available: {exc}")
     try:
         SatelliteService.initialize()
     except Exception as exc:

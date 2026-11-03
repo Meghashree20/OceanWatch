@@ -154,7 +154,7 @@ export class MissingApiEndpointError extends ApiClientError {
 }
 
 const defaultConfig: ApiClientConfig = {
-  baseUrl: import.meta.env.VITE_API_BASE_URL ?? '',
+  baseUrl: import.meta.env.VITE_API_BASE_URL ?? 'http://127.0.0.1:8000',
   timeoutMs: Number(import.meta.env.VITE_API_TIMEOUT_MS ?? 8000),
 };
 
@@ -188,7 +188,14 @@ export class OceanWatchApiClient {
       });
 
       if (!response.ok) {
-        throw new ApiClientError(`OceanWatch API request failed with status ${response.status}.`, {
+        let detail = `status ${response.status}`;
+        try {
+          const errorBody = await response.json() as { error?: { message?: string }; detail?: string };
+          detail = errorBody.error?.message ?? errorBody.detail ?? detail;
+        } catch {
+          // Preserve the status message when the server does not return JSON.
+        }
+        throw new ApiClientError(`OceanWatch API request failed: ${detail}.`, {
           status: response.status,
         });
       }
@@ -262,6 +269,10 @@ export class OceanWatchApiClient {
 
   getSummaryStatistics() {
     return this.requestJson<DataStats>('/api/data/stats', { signal: undefined });
+  }
+
+  getHealth() {
+    return this.requestJson<Record<string, unknown>>('/api/health', { signal: undefined });
   }
 
   getHotspotStats() {

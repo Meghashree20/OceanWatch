@@ -3,7 +3,6 @@ import {
   ArrowRight,
   BarChart3,
   Calendar,
-  ChevronDown,
   ChevronLeft,
   ChevronRight,
   Database,
@@ -18,7 +17,6 @@ import {
   RotateCcw,
   Search,
   ShieldAlert,
-  SlidersHorizontal,
   Table,
   Target,
   TrendingUp,
@@ -29,6 +27,7 @@ import {
 } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { PageHeader } from '@/components/layout/PageShell';
+import { SharedFilterBar } from '@/components/SharedFilterBar';
 import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
 import { Card, CardBody, CardHeader } from '@/components/ui/Card';
@@ -43,15 +42,6 @@ import { useDashboardFilters, type DashboardFilters } from '@/lib/dashboardFilte
 // -----------------------------------------------------------------------------
 // Shared Filter Definitions & Constants (Verified against MongoDB schema)
 // -----------------------------------------------------------------------------
-const OCEAN_OPTIONS = [
-  'ALL',
-  'Pacific Ocean',
-  'Atlantic Ocean',
-  'Indian Ocean',
-  'Arctic Ocean',
-  'Southern Ocean',
-];
-
 const DATE_PRESETS = [
   { label: 'All Records (2010–2024)', start: '', end: '' },
   { label: '2020–2024', start: '2020-01-01', end: '2024-12-31' },
@@ -61,7 +51,7 @@ const DATE_PRESETS = [
 
 export function IntelligencePage() {
   // Shared Filter State
-  const { filters, setFilters, resetFilters } = useDashboardFilters();
+  const { filters, resetFilters } = useDashboardFilters();
 
   // Data States
   const [observations, setObservations] = useState<PollutionObservation[]>([]);
@@ -75,6 +65,7 @@ export function IntelligencePage() {
   const [error, setError] = useState<string | null>(null);
   const [globalResetKey, setGlobalResetKey] = useState<number>(0);
   const [availableRegions, setAvailableRegions] = useState<string[]>([]);
+  const [availableOceans, setAvailableOceans] = useState<string[]>([]);
 
   // Load Unfiltered Summary Baseline on Mount
   useEffect(() => {
@@ -86,9 +77,10 @@ export function IntelligencePage() {
 
   useEffect(() => {
     oceanWatchApi.getAllObservations()
-      .then((response) => setAvailableRegions(
-        [...new Set(response.data.map((observation) => observation.region).filter((value): value is string => Boolean(value)))].sort()
-      ))
+      .then((response) => {
+        setAvailableRegions([...new Set(response.data.map((observation) => observation.region).filter((value): value is string => Boolean(value)))].sort());
+        setAvailableOceans([...new Set(response.data.map((observation) => observation.ocean).filter((value): value is string => Boolean(value)))].sort());
+      })
       .catch(() => null);
   }, []);
 
@@ -201,16 +193,6 @@ export function IntelligencePage() {
           <Button
             variant="outline"
             size="sm"
-            onClick={handleResetFilters}
-            className="bg-white/90 shadow-sm"
-            title="Reset all filters and view settings"
-          >
-            <RotateCcw className="h-3.5 w-3.5 text-ocean-600" />
-            Reset All
-          </Button>
-          <Button
-            variant="outline"
-            size="sm"
             onClick={() => fetchDashboardData(filters)}
             disabled={loading}
             className="ml-auto bg-white/90 shadow-sm"
@@ -223,13 +205,12 @@ export function IntelligencePage() {
 
       <div className="container-page mt-6 space-y-6">
         {/* SHARED FILTER BAR */}
-        <SharedDashboardFilterBar
-          filters={filters}
-          onChange={setFilters}
-          onReset={handleResetFilters}
-          activeCount={activeFilterCount}
-          totalMatchingRecords={filteredCount}
+        <SharedFilterBar
+          title="Shared Surveillance Filters"
+          description="Region, ocean, and date filters update live observation metrics. Hotspot lists support region and ocean only."
           availableRegions={availableRegions}
+          availableOceans={availableOceans}
+          datePresets={DATE_PRESETS}
         />
 
         {(filters.startDate || filters.endDate) && (
@@ -341,264 +322,6 @@ export function IntelligencePage() {
         />
       </div>
     </div>
-  );
-}
-
-// -----------------------------------------------------------------------------
-// Component: Shared Dashboard Filter Bar
-// -----------------------------------------------------------------------------
-function SharedDashboardFilterBar({
-  filters,
-  onChange,
-  onReset,
-  activeCount,
-  totalMatchingRecords,
-  availableRegions,
-}: {
-  filters: DashboardFilters;
-  onChange: React.Dispatch<React.SetStateAction<DashboardFilters>>;
-  onReset: () => void;
-  activeCount: number;
-  totalMatchingRecords: number | null;
-  availableRegions: string[];
-}) {
-  const [collapsed, setCollapsed] = useState<boolean>(false);
-
-  const handleOceanChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
-    onChange((prev) => ({ ...prev, ocean: e.target.value }));
-  };
-
-  const handleRegionChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
-    onChange((prev) => ({ ...prev, region: e.target.value }));
-  };
-
-  const handleStartDateChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    onChange((prev) => ({ ...prev, startDate: e.target.value }));
-  };
-
-  const handleEndDateChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    onChange((prev) => ({ ...prev, endDate: e.target.value }));
-  };
-
-  const applyPreset = (start: string, end: string) => {
-    onChange((prev) => ({ ...prev, startDate: start, endDate: end }));
-  };
-
-  return (
-    <Card className="border border-ocean-200/90 shadow-sm transition-all">
-      <div className="border-b border-ocean-100 bg-white/95 px-5 py-3.5 sm:px-6">
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <div className="flex items-center gap-2.5">
-            <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-ocean-100 text-ocean-700">
-              <SlidersHorizontal className="h-4 w-4" />
-            </span>
-            <span className="text-sm font-bold text-navy-950">Shared Surveillance Filters</span>
-            {activeCount > 0 && (
-              <span className="rounded-full bg-cyan-100 px-2 py-0.5 font-mono text-[11px] font-semibold text-cyan-800">
-                {activeCount} active
-              </span>
-            )}
-            {totalMatchingRecords !== null && (
-              <span className="hidden font-mono text-xs text-ocean-500 sm:inline">
-                ({totalMatchingRecords.toLocaleString()} matching observation records in MongoDB)
-              </span>
-            )}
-          </div>
-
-          <div className="flex items-center gap-2">
-            {activeCount > 0 && (
-              <button
-                type="button"
-                onClick={onReset}
-                className="flex items-center gap-1 rounded-md px-2.5 py-1 text-xs font-semibold text-ocean-600 hover:bg-ocean-100/80 hover:text-navy-950"
-              >
-                <X className="h-3.5 w-3.5" />
-                Clear Filters
-              </button>
-            )}
-            <button
-              type="button"
-              onClick={() => setCollapsed(!collapsed)}
-              className="text-xs font-medium text-ocean-500 hover:text-ocean-700"
-            >
-              {collapsed ? 'Expand Controls' : 'Minimize'}
-            </button>
-          </div>
-        </div>
-      </div>
-
-      {!collapsed && (
-        <CardBody className="bg-ocean-50/40 p-5 sm:p-6">
-          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-            {/* 1. Ocean Basin Filter */}
-            <div>
-              <label className="block text-xs font-semibold uppercase tracking-wider text-ocean-600">
-                Ocean Basin
-              </label>
-              <div className="relative mt-1.5">
-                <select
-                  value={filters.ocean}
-                  onChange={handleOceanChange}
-                  className="w-full appearance-none rounded-xl border border-ocean-200 bg-white px-3.5 py-2 pr-9 text-xs font-medium text-navy-950 shadow-xs focus:border-cyan-500 focus:outline-none focus:ring-1 focus:ring-cyan-500"
-                >
-                  <option value="ALL">All Oceans &amp; Basins</option>
-                  {OCEAN_OPTIONS.filter((o) => o !== 'ALL').map((ocean) => (
-                    <option key={ocean} value={ocean}>
-                      {ocean}
-                    </option>
-                  ))}
-                </select>
-                <ChevronDown className="pointer-events-none absolute right-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-ocean-400" />
-              </div>
-            </div>
-
-            {/* 2. Specific Region Filter */}
-            <div>
-              <label className="block text-xs font-semibold uppercase tracking-wider text-ocean-600">
-                Marine Region / Sea
-              </label>
-              <div className="relative mt-1.5">
-                <select
-                  value={filters.region}
-                  onChange={handleRegionChange}
-                  className="w-full appearance-none rounded-xl border border-ocean-200 bg-white px-3.5 py-2 pr-9 text-xs font-medium text-navy-950 shadow-xs focus:border-cyan-500 focus:outline-none focus:ring-1 focus:ring-cyan-500"
-                >
-                  <option value="ALL">All Marine Regions</option>
-                  {availableRegions.map((region) => (
-                    <option key={region} value={region}>
-                      {region}
-                    </option>
-                  ))}
-                </select>
-                <ChevronDown className="pointer-events-none absolute right-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-ocean-400" />
-              </div>
-            </div>
-
-            {/* 3. Start Date Filter */}
-            <div>
-              <label className="block text-xs font-semibold uppercase tracking-wider text-ocean-600">
-                Sample Start Date (UTC)
-              </label>
-              <div className="relative mt-1.5">
-                <input
-                  type="date"
-                  min="2010-01-01"
-                  max={filters.endDate || '2024-12-31'}
-                  value={filters.startDate}
-                  onChange={handleStartDateChange}
-                  className="w-full rounded-xl border border-ocean-200 bg-white px-3.5 py-2 text-xs font-medium text-navy-950 shadow-xs focus:border-cyan-500 focus:outline-none focus:ring-1 focus:ring-cyan-500"
-                />
-              </div>
-            </div>
-
-            {/* 4. End Date Filter */}
-            <div>
-              <label className="block text-xs font-semibold uppercase tracking-wider text-ocean-600">
-                Sample End Date (UTC)
-              </label>
-              <div className="relative mt-1.5">
-                <input
-                  type="date"
-                  min={filters.startDate || '2010-01-01'}
-                  max="2024-12-31"
-                  value={filters.endDate}
-                  onChange={handleEndDateChange}
-                  className="w-full rounded-xl border border-ocean-200 bg-white px-3.5 py-2 text-xs font-medium text-navy-950 shadow-xs focus:border-cyan-500 focus:outline-none focus:ring-1 focus:ring-cyan-500"
-                />
-              </div>
-            </div>
-          </div>
-
-          {/* Quick Date Presets & Capabilities Note */}
-          <div className="mt-4 flex flex-wrap items-center justify-between gap-3 border-t border-ocean-100 pt-3 text-xs">
-            <div className="flex flex-wrap items-center gap-1.5">
-              <span className="font-semibold text-ocean-600 mr-1">Date Presets:</span>
-              {DATE_PRESETS.map((preset) => {
-                const isSelected =
-                  filters.startDate === preset.start && filters.endDate === preset.end;
-                return (
-                  <button
-                    key={preset.label}
-                    type="button"
-                    onClick={() => applyPreset(preset.start, preset.end)}
-                    className={`rounded-lg px-2.5 py-1 text-[11px] font-medium transition-all ${
-                      isSelected
-                        ? 'bg-navy-950 text-cyan-300 font-semibold shadow-xs'
-                        : 'border border-ocean-200 bg-white text-ocean-700 hover:bg-ocean-100'
-                    }`}
-                  >
-                    {preset.label}
-                  </button>
-                );
-              })}
-            </div>
-
-            <div className="flex items-center gap-1 text-[11px] text-ocean-500">
-              <Info className="h-3.5 w-3.5 text-ocean-400 shrink-0" />
-              <span>
-                Region &amp; dates filter live MongoDB observations. Hotspot lists support region, but the current
-                list API does not support date filters; hotspot statistics and recommendations remain unfiltered.
-              </span>
-            </div>
-          </div>
-
-          {/* Active Filter Chips */}
-          {activeCount > 0 && (
-            <div className="mt-3 flex flex-wrap items-center gap-2 pt-1">
-              <span className="text-[11px] font-semibold text-ocean-500">Active Criteria:</span>
-              {filters.ocean !== 'ALL' && (
-                <span className="inline-flex items-center gap-1 rounded-md bg-ocean-100 px-2 py-0.5 text-[11px] font-medium text-ocean-800">
-                  Ocean: {filters.ocean}
-                  <button
-                    type="button"
-                    onClick={() => onChange((prev) => ({ ...prev, ocean: 'ALL' }))}
-                    className="hover:text-red-600"
-                  >
-                    <X className="h-3 w-3" />
-                  </button>
-                </span>
-              )}
-              {filters.region !== 'ALL' && (
-                <span className="inline-flex items-center gap-1 rounded-md bg-ocean-100 px-2 py-0.5 text-[11px] font-medium text-ocean-800">
-                  Region: {filters.region}
-                  <button
-                    type="button"
-                    onClick={() => onChange((prev) => ({ ...prev, region: 'ALL' }))}
-                    className="hover:text-red-600"
-                  >
-                    <X className="h-3 w-3" />
-                  </button>
-                </span>
-              )}
-              {filters.startDate && (
-                <span className="inline-flex items-center gap-1 rounded-md bg-cyan-100 px-2 py-0.5 text-[11px] font-medium text-cyan-900">
-                  From: {filters.startDate}
-                  <button
-                    type="button"
-                    onClick={() => onChange((prev) => ({ ...prev, startDate: '' }))}
-                    className="hover:text-red-600"
-                  >
-                    <X className="h-3 w-3" />
-                  </button>
-                </span>
-              )}
-              {filters.endDate && (
-                <span className="inline-flex items-center gap-1 rounded-md bg-cyan-100 px-2 py-0.5 text-[11px] font-medium text-cyan-900">
-                  Until: {filters.endDate}
-                  <button
-                    type="button"
-                    onClick={() => onChange((prev) => ({ ...prev, endDate: '' }))}
-                    className="hover:text-red-600"
-                  >
-                    <X className="h-3 w-3" />
-                  </button>
-                </span>
-              )}
-            </div>
-          )}
-        </CardBody>
-      )}
-    </Card>
   );
 }
 

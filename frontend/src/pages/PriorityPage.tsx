@@ -15,8 +15,10 @@ import { PageHeader } from '@/components/layout/PageShell';
 import { Badge } from '@/components/ui/Badge';
 import { Card, CardBody, CardHeader } from '@/components/ui/Card';
 import { oceanWatchApi, type Recommendation } from '@/lib/api/client';
+import { useDashboardFilters } from '@/lib/dashboardFilters';
 
 export function PriorityPage() {
+  const { filters } = useDashboardFilters();
   const [recommendations, setRecommendations] = useState<Recommendation[]>([]);
   const [selected, setSelected] = useState<Recommendation | null>(null);
   const [loading, setLoading] = useState(true);
@@ -58,6 +60,22 @@ export function PriorityPage() {
       </PageHeader>
 
       <div className="container-page py-10 lg:py-14">
+        <Card className="mb-6 border-sky-200 bg-sky-50">
+          <CardBody className="p-4">
+            <div className="flex items-start gap-3">
+              <Info className="mt-0.5 h-5 w-5 shrink-0 text-sky-700" />
+              <div className="min-w-0">
+                <p className="text-sm font-semibold text-sky-950">Dashboard filter context</p>
+                <div className="mt-2 flex flex-wrap gap-2 text-xs text-sky-900">
+                  <span className="rounded-md border border-sky-200 bg-white px-2.5 py-1.5">Region: {filters.region === 'ALL' ? 'All regions' : filters.region}</span>
+                  <span className="rounded-md border border-sky-200 bg-white px-2.5 py-1.5">Ocean: {filters.ocean === 'ALL' ? 'All oceans' : filters.ocean}</span>
+                  <span className="rounded-md border border-sky-200 bg-white px-2.5 py-1.5">Dates: {filters.startDate || filters.endDate ? `${filters.startDate || 'Any'} to ${filters.endDate || 'Any'}` : 'All dates'}</span>
+                </div>
+                <p className="mt-2 text-xs leading-5 text-sky-800">Recommendation results are global and unfiltered. The current recommendation API does not support region, ocean, or date parameters, so changing shared filters does not change these results.</p>
+              </div>
+            </div>
+          </CardBody>
+        </Card>
         <div className="grid gap-6 lg:grid-cols-[1.1fr_0.9fr]">
           <Card>
             <CardHeader>

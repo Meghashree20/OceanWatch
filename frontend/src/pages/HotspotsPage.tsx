@@ -6,17 +6,13 @@ import {
   Crosshair,
   Database,
   Download,
-  Filter,
   Gauge,
-  Globe2,
   Layers,
   MapPin,
   Maximize2,
   Radio,
-  RefreshCw,
   ScatterChart,
   Target,
-  Waves,
   X,
 } from 'lucide-react';
 import { PageHeader } from '@/components/layout/PageShell';
@@ -25,6 +21,7 @@ import { Button } from '@/components/ui/Button';
 import { Card, CardBody, CardHeader } from '@/components/ui/Card';
 import { SectionHeader } from '@/components/ui/SectionHeader';
 import { PollutionMap } from '@/components/PollutionMap';
+import { SharedFilterBar } from '@/components/SharedFilterBar';
 import { cn } from '@/lib/utils';
 import { oceanWatchApi, type Hotspot, type PollutionObservation } from '@/lib/api/client';
 import { useDashboardFilters, type DashboardFilters } from '@/lib/dashboardFilters';
@@ -101,7 +98,7 @@ function toClusterData(hotspots: Hotspot[]): ClusterData[] {
 /* ------------------------------------------------------------------ */
 
 export function HotspotsPage() {
-  const { filters, setFilters, resetFilters } = useDashboardFilters();
+  const { filters, setFilters } = useDashboardFilters();
   const [selectedCluster, setSelectedCluster] = useState<ClusterData | null>(null);
   const [clusters, setClusters] = useState<ClusterData[]>([]);
   const [hotspots, setHotspots] = useState<Hotspot[]>([]);
@@ -170,11 +167,9 @@ export function HotspotsPage() {
       </PageHeader>
 
       <div className="container-page py-10 lg:py-14">
-        {/* Filter panel */}
-        <FilterPanel
-          filters={filters}
-          setFilters={setFilters}
-          resetFilters={resetFilters}
+        <SharedFilterBar
+          title="Filters"
+          description="Region and ocean filters affect hotspot results. Date values are applied to observation requests only."
           availableRegions={availableRegions}
           availableOceans={availableOceans}
         />
@@ -237,79 +232,6 @@ export function HotspotsPage() {
         <MapLegend />
 
       </div>
-    </div>
-  );
-}
-
-/* ------------------------------------------------------------------ */
-/* Filter panel                                                         */
-/* ------------------------------------------------------------------ */
-
-function FilterPanel({
-  filters,
-  setFilters,
-  resetFilters,
-  availableRegions,
-  availableOceans,
-}: {
-  filters: DashboardFilters;
-  setFilters: React.Dispatch<React.SetStateAction<DashboardFilters>>;
-  resetFilters: () => void;
-  availableRegions: string[];
-  availableOceans: string[];
-}) {
-  const filtersActive = filters.region !== 'ALL' || filters.ocean !== 'ALL' || Boolean(filters.startDate || filters.endDate);
-
-  return (
-    <Card>
-      <CardHeader>
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-2.5">
-            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-ocean-100 text-ocean-700">
-              <Filter className="h-4 w-4" />
-            </div>
-            <h3 className="text-sm font-bold text-navy-950">Filters</h3>
-          </div>
-          {filtersActive && <Button variant="ghost" size="sm" className="px-2" onClick={resetFilters}><RefreshCw className="h-3.5 w-3.5" />Clear shared filters</Button>}
-        </div>
-      </CardHeader>
-      <CardBody>
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-          <FilterField icon={CalendarRange} label="Start date (UTC)">
-            <input type="date" max={filters.endDate || undefined} value={filters.startDate} onChange={(event) => setFilters((current) => ({ ...current, startDate: event.target.value }))} className="w-full rounded-lg border border-ocean-200 bg-white px-3 py-2.5 text-sm text-navy-900 focus:border-cyan-500 focus:outline-none focus:ring-1 focus:ring-cyan-500" />
-          </FilterField>
-          <FilterField icon={CalendarRange} label="End date (UTC, inclusive)">
-            <input type="date" min={filters.startDate || undefined} value={filters.endDate} onChange={(event) => setFilters((current) => ({ ...current, endDate: event.target.value }))} className="w-full rounded-lg border border-ocean-200 bg-white px-3 py-2.5 text-sm text-navy-900 focus:border-cyan-500 focus:outline-none focus:ring-1 focus:ring-cyan-500" />
-          </FilterField>
-          <FilterField icon={Globe2} label="Region">
-            <select value={filters.region} onChange={(event) => setFilters((current) => ({ ...current, region: event.target.value }))} className="w-full rounded-lg border border-ocean-200 bg-white px-3 py-2.5 text-sm text-navy-900 focus:border-cyan-500 focus:outline-none focus:ring-1 focus:ring-cyan-500"><option value="ALL">All regions</option>{availableRegions.map((region) => <option key={region} value={region}>{region}</option>)}</select>
-          </FilterField>
-          <FilterField icon={Waves} label="Ocean">
-            <select value={filters.ocean} onChange={(event) => setFilters((current) => ({ ...current, ocean: event.target.value }))} className="w-full rounded-lg border border-ocean-200 bg-white px-3 py-2.5 text-sm text-navy-900 focus:border-cyan-500 focus:outline-none focus:ring-1 focus:ring-cyan-500"><option value="ALL">All oceans</option>{availableOceans.map((ocean) => <option key={ocean} value={ocean}>{ocean}</option>)}</select>
-          </FilterField>
-        </div>
-        <p className="mt-3 text-xs leading-5 text-ocean-500">Region and ocean filters are sent to the hotspot-list API. Date values are shared with observation views; hotspot listing currently has no date-filter parameters.</p>
-      </CardBody>
-    </Card>
-  );
-}
-
-function FilterField({
-  icon: Icon,
-  label,
-  children,
-}: {
-  icon: typeof Filter;
-  label: string;
-  children: React.ReactNode;
-}) {
-  return (
-    <div>
-      <label className="mb-1.5 flex items-center gap-1.5 text-xs font-medium text-ocean-600">
-        <Icon className="h-3.5 w-3.5 text-ocean-400" />
-        {label}
-      </label>
-      {children}
     </div>
   );
 }

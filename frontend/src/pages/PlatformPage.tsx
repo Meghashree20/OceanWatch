@@ -1,11 +1,11 @@
 import { ArrowRight, BarChart3, Calendar, ChevronDown, Database, Download, Filter, Gauge, Layers3, Map, RefreshCw, Search, SlidersHorizontal, Target, TrendingUp, Waves } from 'lucide-react';
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { PageHeader } from '@/components/layout/PageShell';
 import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
 import { Card, CardBody, CardHeader } from '@/components/ui/Card';
 import { SectionHeader } from '@/components/ui/SectionHeader';
-import { oceanWatchApi, type DataStats, type ForecastMetrics } from '@/lib/api/client';
+import { oceanWatchApi, type DataStats, type ForecastMetrics, type PollutionObservation } from '@/lib/api/client';
 
 export interface PlatformPageConfig {
   title: string;
@@ -31,9 +31,81 @@ function PlatformContent({ type }: { type: PlatformPageConfig['type'] }) {
 
 function ExploreContent() {
   const [stats, setStats] = useState<DataStats | null>(null);
-  const [error, setError] = useState<string | null>(null);
-  useEffect(() => { oceanWatchApi.getSummaryStatistics().then(setStats).catch((requestError: Error) => setError(requestError.message)); }, []);
-  return <><SectionHeader eyebrow="Dataset overview" title="A structured foundation for discovery" description="The explore workspace will bring together the observation sources that power OceanWatch intelligence." /><div className="mt-10 grid gap-5 md:grid-cols-3"><MetricCard label="Observation records" value={stats ? stats.total_observations.toLocaleString() : '—'} change={error ?? (stats ? 'Backend data statistics' : 'Loading data statistics')} icon={Database} /><MetricCard label="Geographic coverage" value="—" change="Not exposed by the backend stats endpoint" icon={Map} /><MetricCard label="Latest observation" value="—" change="Not exposed by the backend stats endpoint" icon={Calendar} /></div><div className="mt-8 grid gap-6 lg:grid-cols-[1.3fr_0.7fr]"><PlaceholderPanel title="Observation coverage" icon={Map}><div className="relative flex h-64 items-center justify-center overflow-hidden rounded-xl border border-ocean-200 bg-ocean-50 dot-pattern"><span className="relative rounded-lg bg-white px-3 py-2 text-xs font-medium text-ocean-600 shadow-card">Coordinate coverage is available in Data Explorer.</span></div></PlaceholderPanel><PlaceholderPanel title="Data sources" icon={Layers3}><div className="space-y-3"><SourceRow label="Marine observations" status="Backend connected" /><SourceRow label="Oceanographic context" status="Not available" /><SourceRow label="Coastal geography" status="Not available" /></div></PlaceholderPanel></div></>;
+  const [observations, setObservations] = useState<PollutionObservation[]>([]);
+  const [datasetScope, setDatasetScope] = useState<'retrieved' | 'complete' | null>(null);
+  const [connectionStatus, setConnectionStatus] = useState<'checking' | 'connected' | 'failed'>('checking');
+  const [connectionError, setConnectionError] = useState<string | null>(null);
+  const [observationsStatus, setObservationsStatus] = useState<'loading' | 'loaded' | 'failed'>('loading');
+  const [observationsError, setObservationsError] = useState<string | null>(null);
+
+  const loadExploreData = useCallback(() => {
+    setConnectionStatus('checking');
+    setConnectionError(null);
+    setObservationsStatus('loading');
+    setObservationsError(null);
+    setStats(null);
+    setObservations([]);
+    setDatasetScope(null);
+
+    oceanWatchApi.getHealth()
+      .then(() => setConnectionStatus('connected'))
+      .catch((requestError: Error) => {
+        setConnectionStatus('failed');
+        setConnectionError(requestError.message);
+      });
+
+    oceanWatchApi.getAllObservations()
+      .then((response) => {
+        setStats({ total_observations: response.total });
+        setObservations(response.data);
+        setDatasetScope(response.data.length >= response.total ? 'complete' : 'retrieved');
+        setObservationsStatus('loaded');
+      })
+      .catch((requestError: Error) => {
+        setObservationsStatus('failed');
+        setObservationsError(requestError.message);
+      });
+  }, []);
+
+  useEffect(() => { loadExploreData(); }, [loadExploreData]);
+
+  const connectionLabel = connectionStatus === 'checking'
+    ? 'Checking connection'
+    : connectionStatus === 'connected'
+      ? 'Connected'
+      : 'Connection failed';
+  const observationLabel = observationsStatus === 'loading'
+    ? 'Loading observations'
+    : observationsStatus === 'failed'
+      ? 'Data unavailable'
+      : stats?.total_observations === 0
+        ? 'No observations found'
+        : 'Observation data available';
+  const validLocations = observations.filter((observation) =>
+    Number.isFinite(observation.latitude) && Number.isFinite(observation.longitude)
+  );
+  const distinctLocations = new Set(validLocations.map((observation) =>
+    `${observation.latitude},${observation.longitude}`
+  )).size;
+  const validDates = observations
+    .map((observation) => observation.sample_date)
+    .filter((date): date is string => typeof date === 'string' && !Number.isNaN(Date.parse(date)));
+  const latestObservationDate = validDates.length
+    ? new Date(validDates.reduce((latest, date) => Math.max(latest, Date.parse(date)), Number.NEGATIVE_INFINITY)).toISOString().slice(0, 10)
+    : null;
+  const derivedScope = datasetScope === 'complete' ? 'Complete dataset' : 'Retrieved dataset';
+  const geographicCoverage = observationsStatus === 'loading'
+    ? { value: 'Loading', explanation: 'Validating observation coordinates' }
+    : distinctLocations >= 2
+      ? { value: `${distinctLocations.toLocaleString()} locations`, explanation: `Calculated from ${derivedScope.toLowerCase()}` }
+      : { value: 'Not available', explanation: 'At least two valid locations are required' };
+  const latestObservation = observationsStatus === 'loading'
+    ? { value: 'Loading', explanation: 'Validating observation dates' }
+    : latestObservationDate
+      ? { value: latestObservationDate, explanation: `Calculated from ${derivedScope.toLowerCase()}` }
+      : { value: 'Not available', explanation: 'No valid observation dates were returned' };
+
+  return <><SectionHeader eyebrow="Dataset overview" title="A structured foundation for discovery" description="The explore workspace will bring together the observation sources that power OceanWatch intelligence." /><div className="mt-10 grid gap-5 md:grid-cols-3"><MetricCard label="Observation records" value={stats ? stats.total_observations.toLocaleString() : '—'} change={observationsStatus === 'loading' ? 'Loading observations' : observationsError ?? (stats ? 'Live observation data' : 'Data unavailable')} icon={Database} /><MetricCard label="Geographic coverage" value={geographicCoverage.value} change={geographicCoverage.explanation} icon={Map} /><MetricCard label="Latest observation" value={latestObservation.value} change={latestObservation.explanation} icon={Calendar} /></div><div className="mt-8 grid gap-6 lg:grid-cols-[1.3fr_0.7fr]"><PlaceholderPanel title="Observation coverage" icon={Map}><div className="relative flex h-64 items-center justify-center overflow-hidden rounded-xl border border-ocean-200 bg-ocean-50 dot-pattern"><span className="relative rounded-lg bg-white px-3 py-2 text-xs font-medium text-ocean-600 shadow-card">Coordinate coverage is available in Data Explorer.</span></div></PlaceholderPanel><PlaceholderPanel title="Data sources" icon={Layers3}><div className="space-y-3"><SourceRow label="Marine observations" status={connectionLabel} loading={connectionStatus === 'checking'} /><SourceRow label="Observation data" status={observationLabel} loading={observationsStatus === 'loading'} /><SourceRow label="Oceanographic context" status="Not available" /><SourceRow label="Coastal geography" status="Not available" />{(connectionStatus === 'failed' || observationsStatus === 'failed') && <div className="rounded-lg border border-red-200 bg-red-50 px-3 py-3"><div className="space-y-2 text-xs text-red-700">{connectionStatus === 'failed' && <p>Backend connection failed: {connectionError}</p>}{observationsStatus === 'failed' && <p>Observation data could not be loaded: {observationsError}</p>}</div><Button variant="outline" size="sm" onClick={loadExploreData} className="mt-3"><RefreshCw className="h-3.5 w-3.5" /> Retry</Button></div>}{observationsStatus === 'loaded' && stats?.total_observations === 0 && <div className="rounded-lg border border-ocean-200 bg-ocean-50 px-3 py-3 text-xs text-ocean-600">The API is available, but no observations match the current dataset.</div>}</div></PlaceholderPanel></div></>;
 }
 
 function HotspotsContent() { return <><div className="flex flex-col justify-between gap-5 sm:flex-row sm:items-end"><SectionHeader eyebrow="Spatial intelligence" title="Where pollution concentrates" description="DBSCAN-based clustering will surface meaningful geographic hotspots from marine observation data." /><Button variant="outline"><Download className="h-4 w-4" /> Export view</Button></div><div className="mt-10 grid gap-5 md:grid-cols-3"><MetricCard label="Detected hotspots" value="—" change="Waiting for observations" icon={Target} /><MetricCard label="Highest priority zone" value="—" change="Not yet calculated" icon={Gauge} /><MetricCard label="Clustering confidence" value="—" change="Model preview" icon={BarChart3} /></div><div className="mt-8"><PlaceholderPanel title="Pollution hotspot map" icon={Map} action={<Badge variant="cyan">DBSCAN clustering</Badge>}><MapPlaceholder large /></PlaceholderPanel></div></>; }
@@ -62,7 +134,7 @@ function PlaceholderPanel({ title, icon: Icon, action, children }: { title: stri
 
 function MapPlaceholder({ large = false }: { large?: boolean }) { return <div className={`relative flex ${large ? 'h-[28rem]' : 'h-64'} items-center justify-center overflow-hidden rounded-xl border border-ocean-200 bg-ocean-50 dot-pattern`}><div className="absolute left-[14%] top-[18%] h-28 w-44 rotate-12 rounded-[45%] border border-cyan-300/60 bg-cyan-100/30" /><div className="absolute left-[42%] top-[40%] h-36 w-52 -rotate-6 rounded-[55%] border border-teal-300/60 bg-teal-100/30" /><div className="absolute right-[12%] top-[20%] h-20 w-28 rotate-45 rounded-[50%] border border-ocean-300 bg-ocean-100/50" /><span className="relative rounded-lg bg-white px-4 py-2 text-xs font-medium text-ocean-600 shadow-card">Interactive map placeholder</span></div>; }
 function ChartPlaceholder() { return <div className="relative h-64 rounded-xl border border-ocean-200 bg-ocean-50 p-5"><div className="absolute inset-x-5 top-5 flex justify-between text-[10px] text-ocean-400"><span>Today</span><span>+30 days</span></div><svg className="absolute inset-0 h-full w-full" viewBox="0 0 600 240" preserveAspectRatio="none" aria-hidden="true"><path d="M0 195C80 180 100 150 160 170S250 120 300 140s70-40 120-22 100-44 180-68" fill="none" stroke="#14b8a6" strokeWidth="3" /><path d="M0 195C80 180 100 150 160 170S250 120 300 140" fill="none" stroke="#0e7490" strokeWidth="3" /></svg><div className="absolute bottom-5 left-5 flex items-center gap-4 text-[10px] text-ocean-500"><span className="flex items-center gap-1.5"><span className="h-1.5 w-5 rounded-full bg-teal-500" />Projected concentration</span><span className="flex items-center gap-1.5"><span className="h-1.5 w-5 rounded-full bg-ocean-700" />Observed</span></div></div>; }
-function SourceRow({ label, status }: { label: string; status: string }) { return <div className="flex items-center justify-between gap-3 rounded-lg border border-ocean-100 bg-ocean-50 px-3 py-3"><span className="text-sm text-navy-800">{label}</span><span className="text-[10px] text-ocean-500">{status}</span></div>; }
+function SourceRow({ label, status, loading = false }: { label: string; status: string; loading?: boolean }) { return <div className="flex items-center justify-between gap-3 rounded-lg border border-ocean-100 bg-ocean-50 px-3 py-3"><span className="text-sm text-navy-800">{label}</span><span className="flex items-center gap-1.5 text-[10px] text-ocean-500">{loading && <RefreshCw className="h-3 w-3 animate-spin" />}{status}</span></div>; }
 function SelectPlaceholder({ label, value }: { label: string; value: string }) { return <div><label className="mb-1.5 block text-xs font-medium text-ocean-600">{label}</label><div className="flex items-center justify-between rounded-lg border border-ocean-200 bg-white px-3 py-2.5 text-sm text-ocean-600"><span>{value}</span><ChevronDown className="h-4 w-4 text-ocean-400" /></div></div>; }
 function RankRow({ rank, name, score }: { rank: string; name: string; score: string }) { return <div className="flex items-center gap-3 rounded-lg border border-ocean-100 bg-ocean-50 px-4 py-3"><span className="font-mono text-xs text-cyan-600">{rank}</span><span className="flex-1 text-sm font-medium text-navy-800">{name}</span><span className="font-mono text-xs text-ocean-500">Score {score}</span></div>; }
 function IntelligenceCard({ icon: Icon, label, title, description, path }: { icon: typeof Map; label: string; title: string; description: string; path: string }) { return <Card className="group hover:-translate-y-1 hover:shadow-card-hover"><CardBody><div className="flex items-start justify-between"><div className="flex h-10 w-10 items-center justify-center rounded-lg bg-ocean-100 text-ocean-700"><Icon className="h-5 w-5" /></div><ArrowRight className="h-4 w-4 text-ocean-300 transition-transform group-hover:translate-x-1 group-hover:text-cyan-500" /></div><p className="mt-6 text-xs font-semibold uppercase tracking-wider text-cyan-600">{label}</p><h3 className="mt-2 text-lg font-bold text-navy-950">{title}</h3><p className="mt-2 text-sm text-ocean-600">{description}</p><Button to={path} variant="ghost" size="sm" className="mt-4 px-0 hover:bg-transparent">Open view <ArrowRight className="h-3.5 w-3.5" /></Button></CardBody></Card>; }

@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import {
   BarChart3,
   Check,
@@ -11,7 +11,6 @@ import {
   Database,
   Download,
   Eye,
-  Filter,
   Layers3,
   ListFilter,
   Search,
@@ -21,8 +20,21 @@ import { PageHeader } from '@/components/layout/PageShell';
 import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
 import { Card, CardBody, CardHeader } from '@/components/ui/Card';
+import { SharedFilterBar } from '@/components/SharedFilterBar';
 import { oceanWatchApi, type PollutionObservation } from '@/lib/api/client';
 import { useDashboardFilters } from '@/lib/dashboardFilters';
+import {
+  Bar,
+  BarChart,
+  Brush,
+  CartesianGrid,
+  Line,
+  LineChart,
+  ResponsiveContainer,
+  Tooltip,
+  XAxis,
+  YAxis,
+} from 'recharts';
 
 const columns = [
   'Observation ID',
@@ -33,14 +45,8 @@ const columns = [
   'Concentration',
 ];
 
-const visualizations = [
-  { title: 'Observations over time', description: 'Temporal record coverage will appear here.', icon: Clock3 },
-  { title: 'Concentration distribution', description: 'Distribution will appear here when values are loaded.', icon: BarChart3 },
-  { title: 'Region distribution', description: 'Regional coverage will appear here when records are loaded.', icon: Layers3 },
-];
-
 export function DataExplorerPage() {
-  const { filters, setFilters, resetFilters } = useDashboardFilters();
+  const { filters } = useDashboardFilters();
   const [columnMenuOpen, setColumnMenuOpen] = useState(false);
   const [visibleColumns, setVisibleColumns] = useState(columns);
   const [observations, setObservations] = useState<PollutionObservation[]>([]);
@@ -51,6 +57,9 @@ export function DataExplorerPage() {
   const [error, setError] = useState<string | null>(null);
   const [availableRegions, setAvailableRegions] = useState<string[]>([]);
   const [availableOceans, setAvailableOceans] = useState<string[]>([]);
+  const [selectedRegion, setSelectedRegion] = useState('ALL');
+  const [selectedUnit, setSelectedUnit] = useState('ALL');
+  const [timeRange, setTimeRange] = useState<{ startIndex?: number; endIndex?: number }>({});
   const pageSize = 25;
 
   useEffect(() => {
@@ -99,6 +108,17 @@ export function DataExplorerPage() {
       .some((value) => value?.toLowerCase().includes(query));
   });
 
+  const chartRegions = useMemo(() => [...new Set(filteredObservations.map((observation) => observation.region).filter((value): value is string => Boolean(value)))].sort(), [filteredObservations]);
+  const measurementUnits = useMemo(() => [...new Set(filteredObservations.map((observation) => observation.unit).filter(Boolean))].sort(), [filteredObservations]);
+  const chartData = useMemo(() => createChartData(filteredObservations, selectedUnit), [filteredObservations, selectedUnit]);
+  const selectedRegionData = chartData.regionDetails.find((item) => item.region === selectedRegion);
+
+  useEffect(() => {
+    setTimeRange({});
+    setSelectedRegion('ALL');
+    setSelectedUnit('ALL');
+  }, [filters, page, search]);
+
   const toggleColumn = (column: string) => {
     setVisibleColumns((current) =>
       current.includes(column) ? current.filter((item) => item !== column) : [...current, column]
@@ -118,28 +138,13 @@ export function DataExplorerPage() {
       </PageHeader>
 
       <div className="container-page py-10 lg:py-14">
-        <Card className="border-navy-800 bg-navy-950 text-white">
-          <CardBody className="p-5 sm:p-6">
-            <div className="flex flex-col gap-5 xl:flex-row xl:items-end xl:justify-between">
-              <div>
-                <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-cyan-300">
-                  <Filter className="h-3.5 w-3.5" /> Observation filters
-                </div>
-                <p className="mt-2 text-sm text-ocean-300">Refine the observation query before records are requested from the API.</p>
-              </div>
-              <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3 xl:flex-1 xl:pl-8">
-                <label className="block"><span className="mb-1.5 block text-[11px] font-medium text-ocean-300">Date from (UTC)</span><input type="date" max={filters.endDate || undefined} value={filters.startDate} onChange={(event) => setFilters((current) => ({ ...current, startDate: event.target.value }))} className="w-full rounded-lg border border-navy-700 bg-navy-900 px-3 py-2.5 text-sm text-white outline-none focus:border-cyan-400 focus:ring-2 focus:ring-cyan-400/30" /></label>
-                <label className="block"><span className="mb-1.5 block text-[11px] font-medium text-ocean-300">Date to (UTC, inclusive)</span><input type="date" min={filters.startDate || undefined} value={filters.endDate} onChange={(event) => setFilters((current) => ({ ...current, endDate: event.target.value }))} className="w-full rounded-lg border border-navy-700 bg-navy-900 px-3 py-2.5 text-sm text-white outline-none focus:border-cyan-400 focus:ring-2 focus:ring-cyan-400/30" /></label>
-                <label className="block"><span className="mb-1.5 block text-[11px] font-medium text-ocean-300">Region</span><select value={filters.region} onChange={(event) => setFilters((current) => ({ ...current, region: event.target.value }))} className="w-full rounded-lg border border-navy-700 bg-navy-900 px-3 py-2.5 text-sm text-white outline-none focus:border-cyan-400"><option value="ALL">All regions</option>{availableRegions.map((region) => <option key={region} value={region}>{region}</option>)}</select></label>
-                <label className="block"><span className="mb-1.5 block text-[11px] font-medium text-ocean-300">Ocean</span><select value={filters.ocean} onChange={(event) => setFilters((current) => ({ ...current, ocean: event.target.value }))} className="w-full rounded-lg border border-navy-700 bg-navy-900 px-3 py-2.5 text-sm text-white outline-none focus:border-cyan-400"><option value="ALL">All oceans</option>{availableOceans.map((ocean) => <option key={ocean} value={ocean}>{ocean}</option>)}</select></label>
-              </div>
-              <div className="mt-4 flex items-center justify-between border-t border-navy-800 pt-3">
-                <span className="text-xs text-ocean-400">Filters apply to observation requests and the table.</span>
-                {(filters.region !== 'ALL' || filters.ocean !== 'ALL' || filters.startDate || filters.endDate) && <Button variant="ghost" size="sm" onClick={resetFilters} className="text-cyan-300 hover:bg-navy-900">Clear filters</Button>}
-              </div>
-            </div>
-          </CardBody>
-        </Card>
+        <SharedFilterBar
+          variant="dark"
+          title="Observation filters"
+          description="Refine the observation query before records are requested from the API."
+          availableRegions={availableRegions}
+          availableOceans={availableOceans}
+        />
 
         <Card className="mt-6">
           <CardBody className="p-5 sm:p-6">
@@ -230,23 +235,16 @@ export function DataExplorerPage() {
           <DataLayerCard title="ML-ready data" description="Feature-ready data prepared for forecasting and prioritization workflows." icon={SlidersHorizontal} tone="navy" />
         </div>
 
-        <div className="mt-8 grid gap-5 lg:grid-cols-3">
-          {visualizations.map(({ title, description, icon: Icon }) => (
-            <Card key={title}>
-              <CardHeader>
-                <div className="flex items-center gap-2.5">
-                  <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-ocean-100 text-ocean-700"><Icon className="h-4 w-4" /></div>
-                  <h2 className="text-sm font-bold text-navy-950">{title}</h2>
-                </div>
-              </CardHeader>
-              <CardBody>
-                <div className="relative flex h-44 items-center justify-center overflow-hidden rounded-xl border border-dashed border-ocean-300 bg-ocean-50 dot-pattern">
-                  <span className="relative rounded-lg border border-white bg-white/90 px-3 py-2 text-center text-xs font-medium text-ocean-600 shadow-card">Visualization placeholder</span>
-                </div>
-                <p className="mt-3 text-xs leading-5 text-ocean-500">{description}</p>
-              </CardBody>
-            </Card>
-          ))}
+        <div className="mt-8 grid gap-5 lg:grid-cols-2">
+          <VisualizationCard title="Observations over time" icon={Clock3} coverage={chartData.coverage}>
+            {chartData.overTime.length ? <ResponsiveContainer width="100%" height={300}><LineChart data={chartData.overTime} margin={{ top: 12, right: 12, left: 0, bottom: 8 }}><CartesianGrid stroke="#dbeaf0" strokeDasharray="3 3" /><XAxis dataKey="date" tick={{ fontSize: 11 }} tickLine={false} axisLine={{ stroke: '#b8d5df' }} /><YAxis allowDecimals={false} tick={{ fontSize: 11 }} tickLine={false} axisLine={{ stroke: '#b8d5df' }} label={{ value: 'Observations', angle: -90, position: 'insideLeft', fontSize: 11 }} /><Tooltip content={<ChartTooltip />} /><Line type="monotone" dataKey="count" name="Observations" stroke="#0e7490" strokeWidth={3} dot={{ r: 3, fill: '#0e7490' }} activeDot={{ r: 5 }} /><Brush dataKey="date" height={22} stroke="#0e7490" travellerWidth={10} startIndex={timeRange.startIndex} endIndex={timeRange.endIndex} onChange={(range) => setTimeRange({ startIndex: range.startIndex, endIndex: range.endIndex })} /></LineChart></ResponsiveContainer> : <ChartEmptyState message="No valid observation dates are available on this page." />}
+          </VisualizationCard>
+          <VisualizationCard title="Concentration distribution" icon={BarChart3} coverage={chartData.coverage}>
+            <ChartControl label="Measurement unit" value={selectedUnit} options={measurementUnits} onChange={setSelectedUnit} />{chartData.concentration.length ? <ResponsiveContainer width="100%" height={265}><BarChart data={chartData.concentration} margin={{ top: 12, right: 12, left: 0, bottom: 8 }}><CartesianGrid stroke="#dbeaf0" strokeDasharray="3 3" /><XAxis dataKey="label" tick={{ fontSize: 11 }} tickLine={false} axisLine={{ stroke: '#b8d5df' }} /><YAxis allowDecimals={false} tick={{ fontSize: 11 }} tickLine={false} axisLine={{ stroke: '#b8d5df' }} label={{ value: 'Observations', angle: -90, position: 'insideLeft', fontSize: 11 }} /><Tooltip content={<ChartTooltip />} /><Bar dataKey="count" name="Observations" fill="#14b8a6" radius={[4, 4, 0, 0]} /></BarChart></ResponsiveContainer> : <ChartEmptyState message="No numeric measurements are available for this unit on this page." />}<p className="mt-2 text-xs text-ocean-500">{chartData.measurementSummary}</p>
+          </VisualizationCard>
+          <VisualizationCard title="Region distribution" icon={Layers3} coverage={chartData.coverage}>
+            <ChartControl label="Inspect region" value={selectedRegion} options={chartRegions} onChange={setSelectedRegion} />{chartData.regions.length ? <ResponsiveContainer width="100%" height={265}><BarChart data={chartData.regions} layout="vertical" margin={{ top: 12, right: 12, left: 12, bottom: 8 }}><CartesianGrid stroke="#dbeaf0" strokeDasharray="3 3" horizontal={false} /><XAxis type="number" allowDecimals={false} tick={{ fontSize: 11 }} tickLine={false} axisLine={{ stroke: '#b8d5df' }} /><YAxis type="category" dataKey="region" width={120} tick={{ fontSize: 10 }} tickLine={false} axisLine={{ stroke: '#b8d5df' }} /><Tooltip content={<ChartTooltip />} /><Bar dataKey="count" name="Observations" fill="#0891b2" radius={[0, 4, 4, 0]} /></BarChart></ResponsiveContainer> : <ChartEmptyState message="No region values are available on this page." />}{selectedRegionData && <p className="mt-2 text-xs text-ocean-500">{selectedRegionData.count.toLocaleString()} observations; measurement range {selectedRegionData.min.toLocaleString()}–{selectedRegionData.max.toLocaleString()}.</p>}
+          </VisualizationCard>
         </div>
 
         <div className="mt-8 flex items-start gap-3 rounded-xl border border-cyan-200 bg-cyan-50 p-4 text-sm text-cyan-900">
@@ -256,6 +254,76 @@ export function DataExplorerPage() {
       </div>
     </div>
   );
+}
+
+function createChartData(observations: PollutionObservation[], selectedUnit: string) {
+  const overTime = new Map<string, number>();
+  const concentrationValues = observations
+    .filter((observation) => selectedUnit === 'ALL' || observation.unit === selectedUnit)
+    .map((observation) => observation.measurement)
+    .filter(Number.isFinite);
+  const regions = new Map<string, { count: number; measurements: number[] }>();
+
+  observations.forEach((observation) => {
+    if (observation.sample_date && !Number.isNaN(Date.parse(observation.sample_date))) {
+      const date = observation.sample_date.slice(0, 10);
+      overTime.set(date, (overTime.get(date) ?? 0) + 1);
+    }
+    const region = observation.region?.trim() || 'Not recorded';
+    const regionData = regions.get(region) ?? { count: 0, measurements: [] };
+    regionData.count += 1;
+    if (Number.isFinite(observation.measurement)) regionData.measurements.push(observation.measurement);
+    regions.set(region, regionData);
+  });
+
+  const min = concentrationValues.length ? Math.min(...concentrationValues) : 0;
+  const max = concentrationValues.length ? Math.max(...concentrationValues) : 0;
+  const binSize = min === max ? 1 : (max - min) / 5;
+  const concentration = Array.from({ length: Math.min(5, concentrationValues.length) }, (_, index) => {
+    const start = min + index * binSize;
+    const end = index === 4 ? max : start + binSize;
+    return {
+      label: `${formatNumber(start)}–${formatNumber(end)}`,
+      count: concentrationValues.filter((value) => value >= start && (index === 4 ? value <= end : value < end)).length,
+    };
+  }).filter((bin) => bin.count > 0);
+
+  return {
+    overTime: [...overTime.entries()].sort(([a], [b]) => a.localeCompare(b)).map(([date, count]) => ({ date, count })),
+    concentration,
+    regions: [...regions.entries()].sort(([, a], [, b]) => b.count - a.count).slice(0, 10).map(([region, data]) => ({ region, count: data.count })),
+    regionDetails: [...regions.entries()].map(([region, data]) => ({
+      region,
+      count: data.count,
+      min: data.measurements.length ? Math.min(...data.measurements) : 0,
+      max: data.measurements.length ? Math.max(...data.measurements) : 0,
+    })),
+    measurementSummary: concentrationValues.length
+      ? `${selectedUnit === 'ALL' ? 'All measurement units' : selectedUnit}; range ${formatNumber(Math.min(...concentrationValues))}–${formatNumber(Math.max(...concentrationValues))}`
+      : 'No valid measurements for the selected unit.',
+    coverage: `${observations.length} loaded page record${observations.length === 1 ? '' : 's'}`,
+  };
+}
+
+function formatNumber(value: number) {
+  return Number.isInteger(value) ? value.toLocaleString() : value.toFixed(2);
+}
+
+function VisualizationCard({ title, icon: Icon, coverage, children }: { title: string; icon: typeof Clock3; coverage: string; children: React.ReactNode }) {
+  return <Card className="lg:col-span-1"><CardHeader><div className="flex items-center gap-2.5"><div className="flex h-8 w-8 items-center justify-center rounded-lg bg-ocean-100 text-ocean-700"><Icon className="h-4 w-4" /></div><h2 className="text-sm font-bold text-navy-950">{title}</h2></div></CardHeader><CardBody><div className="h-[300px] w-full">{children}</div><p className="mt-3 text-xs leading-5 text-ocean-500">Based on {coverage}; filters and pagination limit this view.</p></CardBody></Card>;
+}
+
+function ChartTooltip({ active, payload, label }: { active?: boolean; payload?: Array<{ name?: string; value?: number }>; label?: string }) {
+  if (!active || !payload?.length) return null;
+  return <div className="rounded-lg border border-ocean-200 bg-white px-3 py-2 text-xs shadow-card"><p className="font-semibold text-navy-900">{label}</p><p className="mt-1 text-ocean-600">{payload[0].name}: {payload[0].value?.toLocaleString()}</p></div>;
+}
+
+function ChartControl({ label, value, options, onChange }: { label: string; value: string; options: string[]; onChange: (value: string) => void }) {
+  return <label className="mb-2 flex items-center gap-2 text-xs text-ocean-600"><span className="font-medium">{label}</span><select value={value} onChange={(event) => onChange(event.target.value)} className="rounded-md border border-ocean-200 bg-white px-2 py-1 text-xs text-navy-800"><option value="ALL">All</option>{options.map((option) => <option key={option} value={option}>{option}</option>)}</select></label>;
+}
+
+function ChartEmptyState({ message }: { message: string }) {
+  return <div className="flex h-full items-center justify-center rounded-xl border border-dashed border-ocean-300 bg-ocean-50 px-5 text-center text-xs text-ocean-600">{message}</div>;
 }
 
 function DataLayerCard({ title, description, icon: Icon, tone }: { title: string; description: string; icon: typeof Database; tone: 'cyan' | 'teal' | 'navy' }) {

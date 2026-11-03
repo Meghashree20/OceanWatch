@@ -1,17 +1,16 @@
 import {
   BarChart3,
   CalendarDays,
-  ChevronDown,
   Clock3,
   Database,
   Gauge,
-  MapPin,
   SlidersHorizontal,
   Sparkles,
   TrendingUp,
 } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 import { PageHeader } from '@/components/layout/PageShell';
+import { SharedFilterBar } from '@/components/SharedFilterBar';
 import { Badge } from '@/components/ui/Badge';
 import { Card, CardBody, CardHeader } from '@/components/ui/Card';
 import { oceanWatchApi, type Forecast, type ForecastMetrics } from '@/lib/api/client';
@@ -24,7 +23,7 @@ const performanceItems = [
 ];
 
 export function ForecastPage() {
-  const { filters, setFilters } = useDashboardFilters();
+  const { filters } = useDashboardFilters();
   const [zones, setZones] = useState<string[]>([]);
   const [zone, setZone] = useState('');
   const [horizon, setHorizon] = useState(3);
@@ -95,6 +94,12 @@ export function ForecastPage() {
       </PageHeader>
 
       <div className="container-page py-10 lg:py-14">
+        <SharedFilterBar
+          title="Forecast region"
+          description="Select a trained forecast zone. Date and ocean filters do not affect forecast results."
+          availableRegions={zones}
+          fields={{ region: true, ocean: false, dates: false }}
+        />
         <Card className="overflow-hidden border-navy-800 bg-navy-950 text-white">
           <CardBody className="p-5 sm:p-6">
             <div className="flex flex-col gap-5 xl:flex-row xl:items-end xl:justify-between">
@@ -104,9 +109,8 @@ export function ForecastPage() {
                 </div>
                 <p className="mt-2 text-sm text-ocean-300">Choose the context for the next model run.</p>
               </div>
-              <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4 xl:flex-1 xl:pl-8">
-                <label className="block"><span className="mb-1.5 block text-[11px] font-medium text-ocean-300">Region</span><span className="relative block"><MapPin className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-cyan-300" /><select value={zone} onChange={(event) => { setZone(event.target.value); setFilters((current) => ({ ...current, region: event.target.value || 'ALL' })); }} disabled={!zones.length} className="w-full appearance-none rounded-lg border border-navy-700 bg-navy-900 py-2.5 pl-9 pr-9 text-sm text-white outline-none focus:border-cyan-400"><option value="">{zones.length ? 'Select a region' : 'No model zones available'}</option>{zones.map((availableZone) => <option key={availableZone} value={availableZone}>{availableZone}</option>)}</select><ChevronDown className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-ocean-400" /></span></label>
-                <label className="block"><span className="mb-1.5 block text-[11px] font-medium text-ocean-300">Forecast horizon</span><span className="relative block"><Clock3 className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-cyan-300" /><select value={horizon} onChange={(event) => setHorizon(Number(event.target.value))} className="w-full appearance-none rounded-lg border border-navy-700 bg-navy-900 py-2.5 pl-9 pr-9 text-sm text-white outline-none focus:border-cyan-400"><option value={3}>3 periods</option><option value={6}>6 periods</option><option value={12}>12 periods</option></select><ChevronDown className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-ocean-400" /></span></label>
+              <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3 xl:flex-1 xl:pl-8">
+                <label className="block"><span className="mb-1.5 block text-[11px] font-medium text-ocean-300">Forecast horizon</span><select value={horizon} onChange={(event) => setHorizon(Number(event.target.value))} className="w-full rounded-lg border border-navy-700 bg-navy-900 px-3 py-2.5 text-sm text-white outline-none focus:border-cyan-400"><option value={3}>3 periods</option><option value={6}>6 periods</option><option value={12}>12 periods</option></select></label>
                 <div className="rounded-lg border border-navy-700 bg-navy-900 px-3 py-2.5 text-sm text-ocean-300"><CalendarDays className="mr-2 inline h-4 w-4 text-cyan-300" />Monthly aggregation</div>
                 <div className="rounded-lg border border-navy-700 bg-navy-900 px-3 py-2.5 text-sm text-ocean-300"><SlidersHorizontal className="mr-2 inline h-4 w-4 text-cyan-300" />Backend model output</div>
               </div>
