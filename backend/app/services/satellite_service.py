@@ -5,6 +5,7 @@ from __future__ import annotations
 import base64
 from io import BytesIO
 import logging
+import pickle
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Union
 
@@ -117,7 +118,7 @@ class SatelliteService:
                     hidden_channels=16,
                     device=device,
                 )
-            except (OSError, RuntimeError, TypeError) as exc:
+            except (EOFError, OSError, RuntimeError, TypeError, ValueError, pickle.UnpicklingError) as exc:
                 raise SatelliteUnavailableError(
                     f"Satellite model could not be loaded: {exc}"
                 ) from exc
