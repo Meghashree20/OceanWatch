@@ -1,4 +1,5 @@
 import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom';
+import { ProtectedRoute } from '@/components/auth/ProtectedRoute';
 import { PageShell } from '@/components/layout/PageShell';
 import { HomePage } from '@/pages/HomePage';
 import { HotspotsPage } from '@/pages/HotspotsPage';
@@ -9,6 +10,9 @@ import { IntelligencePage } from '@/pages/IntelligencePage';
 import { SatellitePage } from '@/pages/SatellitePage';
 import { PlatformPage, type PlatformPageConfig } from '@/pages/PlatformPage';
 import { DashboardFiltersProvider } from '@/lib/dashboardFilters';
+import { AuthProvider } from '@/lib/auth';
+import { LoginPage } from '@/pages/LoginPage';
+import { SignupPage } from '@/pages/SignupPage';
 
 const pageConfigs: Record<string, PlatformPageConfig> = {
   explore: {
@@ -59,25 +63,32 @@ const pageConfigs: Record<string, PlatformPageConfig> = {
 function App() {
   return (
     <BrowserRouter>
-      <DashboardFiltersProvider>
-        <PageShell>
-          <Routes>
+      <AuthProvider>
+        <DashboardFiltersProvider>
+          <PageShell>
+            <Routes>
           <Route path="/" element={<HomePage />} />
-          <Route path="/hotspots" element={<HotspotsPage />} />
-          <Route path="/forecast" element={<ForecastPage />} />
-          <Route path="/priority" element={<PriorityPage />} />
-          <Route path="/data" element={<DataExplorerPage />} />
-          <Route path="/intelligence" element={<IntelligencePage />} />
-          <Route path="/satellite" element={<SatellitePage />} />
+          <Route path="/login" element={<LoginPage />} />
+          <Route path="/signup" element={<SignupPage />} />
+          <Route element={<ProtectedRoute />}>
+            <Route path="/explore" element={<PlatformPage config={pageConfigs.explore} />} />
+            <Route path="/hotspots" element={<HotspotsPage />} />
+            <Route path="/forecast" element={<ForecastPage />} />
+            <Route path="/priority" element={<PriorityPage />} />
+            <Route path="/data" element={<DataExplorerPage />} />
+            <Route path="/intelligence" element={<IntelligencePage />} />
+            <Route path="/satellite" element={<SatellitePage />} />
+          </Route>
           {Object.entries(pageConfigs)
-            .filter(([slug]) => slug !== 'hotspots' && slug !== 'forecast' && slug !== 'priority' && slug !== 'data' && slug !== 'intelligence')
+            .filter(([slug]) => !['explore', 'hotspots', 'forecast', 'priority', 'data', 'intelligence'].includes(slug))
             .map(([slug, config]) => (
               <Route key={slug} path={`/${slug}`} element={<PlatformPage config={config} />} />
             ))}
           <Route path="*" element={<Navigate to="/" replace />} />
-          </Routes>
-        </PageShell>
-      </DashboardFiltersProvider>
+            </Routes>
+          </PageShell>
+        </DashboardFiltersProvider>
+      </AuthProvider>
     </BrowserRouter>
   );
 }

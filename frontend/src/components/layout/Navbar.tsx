@@ -3,6 +3,7 @@ import { Link, NavLink, useLocation } from 'react-router-dom';
 import {
   ArrowUpRight,
   ChevronDown,
+  LogOut,
   Menu,
   Waves,
   X,
@@ -15,6 +16,7 @@ import {
 } from '@/lib/navigation';
 import { Button } from '@/components/ui/Button';
 import { cn } from '@/lib/utils';
+import { useAuth } from '@/lib/authContext';
 
 export function Logo({ light = false }: { light?: boolean }) {
   return (
@@ -43,6 +45,7 @@ export function Navbar() {
   const [mobileOpen, setMobileOpen] = useState(false);
   const [scrolled, setScrolled] = useState(false);
   const location = useLocation();
+  const { user, status, logout } = useAuth();
 
   useEffect(() => {
     const onScroll = () => setScrolled(window.scrollY > 8);
@@ -103,10 +106,27 @@ export function Navbar() {
 
         {/* CTA + mobile toggle */}
         <div className="flex items-center gap-2">
-          <Button to="/intelligence" size="sm" className="hidden sm:inline-flex">
-            Explore Intelligence
-            <ArrowUpRight className="h-4 w-4" />
-          </Button>
+          {status === 'authenticated' && user ? (
+            <div className="hidden items-center gap-2 sm:flex">
+              <span className="max-w-32 truncate text-sm font-medium text-navy-800">{user.full_name}</span>
+              <button
+                type="button"
+                onClick={() => void logout()}
+                className="inline-flex items-center gap-1.5 rounded-lg px-3 py-2 text-sm font-semibold text-ocean-700 hover:bg-ocean-100 hover:text-navy-950"
+              >
+                <LogOut className="h-4 w-4" />
+                Sign out
+              </button>
+            </div>
+          ) : status === 'unauthenticated' ? (
+            <Button to="/login" size="sm" variant="outline" className="hidden sm:inline-flex">Sign in</Button>
+          ) : null}
+          {status !== 'authenticated' && (
+            <Button to="/intelligence" size="sm" className="hidden lg:inline-flex">
+              Explore Intelligence
+              <ArrowUpRight className="h-4 w-4" />
+            </Button>
+          )}
           <button
             type="button"
             onClick={() => setMobileOpen((open) => !open)}
@@ -249,6 +269,7 @@ function PlatformDropdown() {
 
 function MobileNav() {
   const location = useLocation();
+  const { user, status, logout } = useAuth();
 
   return (
     <div
@@ -275,10 +296,20 @@ function MobileNav() {
         ))}
 
         <div className="mt-4">
-          <Button to="/intelligence" size="lg" className="w-full">
-            Explore Intelligence
-            <ArrowUpRight className="h-4 w-4" />
-          </Button>
+          {status === 'authenticated' && user ? (
+            <button
+              type="button"
+              onClick={() => void logout()}
+              className="inline-flex w-full items-center justify-center gap-2 rounded-xl border border-ocean-300 bg-white px-5 py-3.5 text-sm font-semibold text-navy-800"
+            >
+              <LogOut className="h-4 w-4" />
+              Sign out
+            </button>
+          ) : (
+            <Button to="/login" size="lg" className="w-full">
+              Sign in to OceanWatch
+            </Button>
+          )}
         </div>
       </nav>
     </div>

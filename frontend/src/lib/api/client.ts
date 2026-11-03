@@ -39,6 +39,21 @@ export interface DataStats {
   total_observations: number;
 }
 
+export interface AuthUser {
+  user_id: string;
+  full_name: string;
+  email: string;
+  is_active: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface AuthSession {
+  user: AuthUser;
+  token_type: string;
+  expires_in: number;
+}
+
 export interface Hotspot {
   cluster_id: number;
   hotspot_id: string | null;
@@ -213,6 +228,7 @@ export class OceanWatchApiClient {
     try {
       const response = await fetch(`${this.config.baseUrl.replace(/\/$/, '')}/${path.replace(/^\//, '')}`, {
         ...init,
+        credentials: 'include',
         signal: controller.signal,
         headers: {
           Accept: 'application/json',
@@ -306,6 +322,30 @@ export class OceanWatchApiClient {
 
   getHealth() {
     return this.requestJson<Record<string, unknown>>('/api/health', { signal: undefined });
+  }
+
+  signup(payload: { full_name: string; email: string; password: string; password_confirmation: string }) {
+    return this.requestJson<AuthUser>('/api/auth/signup', {
+      method: 'POST',
+      body: JSON.stringify(payload),
+      headers: { 'Content-Type': 'application/json' },
+    });
+  }
+
+  login(payload: { email: string; password: string }) {
+    return this.requestJson<AuthSession>('/api/auth/login', {
+      method: 'POST',
+      body: JSON.stringify(payload),
+      headers: { 'Content-Type': 'application/json' },
+    });
+  }
+
+  logout() {
+    return this.requestJson<{ status: string }>('/api/auth/logout', { method: 'POST' });
+  }
+
+  getCurrentUser() {
+    return this.requestJson<AuthUser>('/api/auth/me');
   }
 
   getSatelliteCatalog() {
