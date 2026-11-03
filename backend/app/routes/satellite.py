@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import json
+import logging
 from pathlib import Path
 from typing import List, Optional
 
@@ -8,8 +10,13 @@ from starlette.concurrency import run_in_threadpool
 
 from app.core.auth import require_active_user
 from app.schemas.satellite import HotspotCatalogItem, SatelliteAnalysisResponse
-from app.services.satellite_service import SatelliteService, SatelliteUnavailableError
+from app.services.satellite_service import (
+    InvalidSatelliteRasterError,
+    SatelliteService,
+    SatelliteUnavailableError,
+)
 
+logger = logging.getLogger(__name__)
 router = APIRouter(dependencies=[Depends(require_active_user)])
 MAX_UPLOAD_BYTES = 512 * 1024 * 1024
 
@@ -43,8 +50,8 @@ async def analyze_satellite(
                 body = await request.json()
                 if isinstance(body, dict):
                     hotspot_id = body.get("hotspot_id")
-            except Exception:
-                pass
+            except (json.JSONDecodeError, UnicodeDecodeError) as exc:
+                raise HTTPException(status_code=422, detail="Request body must contain valid JSON.") from exc
 
     # 2. Case A: Uploaded GeoTIFF
     if file is not None:
@@ -64,12 +71,15 @@ async def analyze_satellite(
             )
         except HTTPException:
             raise
-        except ValueError as exc:
+        except InvalidSatelliteRasterError as exc:
             raise HTTPException(status_code=422, detail=str(exc)) from exc
         except SatelliteUnavailableError as exc:
             raise HTTPException(status_code=503, detail=str(exc)) from exc
         except Exception as exc:
+            logger.exception("Unexpected satellite inference error for uploaded file %r.", filename)
             raise HTTPException(status_code=500, detail="Satellite analysis failed. Check the backend logs for details.") from exc
+        finally:
+            await file.close()
 
     # 3. Case B: Registered Hotspot ID
     if hotspot_id:
@@ -79,11 +89,12 @@ async def analyze_satellite(
             raise HTTPException(status_code=404, detail=str(exc)) from exc
         except FileNotFoundError as exc:
             raise HTTPException(status_code=404, detail=str(exc)) from exc
-        except ValueError as exc:
+        except InvalidSatelliteRasterError as exc:
             raise HTTPException(status_code=422, detail=str(exc)) from exc
         except SatelliteUnavailableError as exc:
             raise HTTPException(status_code=503, detail=str(exc)) from exc
         except Exception as exc:
+            logger.exception("Unexpected satellite inference error for hotspot %r.", hotspot_id)
             raise HTTPException(status_code=500, detail="Satellite analysis failed. Check the backend logs for details.") from exc
 
     # Neither provided
@@ -103,9 +114,10 @@ async def analyze_hotspot_by_id(hotspot_id: str):
         raise HTTPException(status_code=404, detail=str(exc)) from exc
     except FileNotFoundError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
-    except ValueError as exc:
+    except InvalidSatelliteRasterError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
     except SatelliteUnavailableError as exc:
         raise HTTPException(status_code=503, detail=str(exc)) from exc
     except Exception as exc:
-        raise HTTPException(status_code=500, detail=f"Satellite analysis failed: {exc}") from exc
+        logger.exception("Unexpected satellite inference error for hotspot %r.", hotspot_id)
+        raise HTTPException(status_code=500, detail="Satellite analysis failed. Check the backend logs for details.") from exc

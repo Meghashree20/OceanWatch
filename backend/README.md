@@ -120,6 +120,35 @@ Ecological risk, human exposure, and cleanup feasibility are not present in the
 NOAA dataset. They must be supplied as external 0-100 contextual inputs. Missing
 inputs return `UNAVAILABLE` rather than fabricated values.
 
+### Satellite segmentation
+
+Satellite inference uses the 11-band, 11-class U-Net in `app/ml/satellite/unet.py`
+and runs on CPU by default. Checkpoints must be accompanied by
+`models/model.pth.metadata.json`. That manifest must be tied to the checkpoint by
+SHA-256 and document the exact architecture, Sentinel-2 band order, output class
+order, per-band preprocessing parameters, MARIDA training provenance, and
+validation evidence. Do not create the manifest from assumptions: the current
+`models/model.pth` has no companion provenance, so the API correctly returns
+HTTP 503 rather than presenting unverified model output as marine-plastic
+detections.
+
+The manifest format is version 1 and includes `format_version`,
+`checkpoint_sha256`, `task`, `architecture` (`name`, `input_bands`,
+`output_classes`, and `hidden_channels`), `band_order`, `class_names`, `training`
+(`dataset`, `provenance`, and `validation_evidence`), and `preprocessing` arrays
+(`scale`, `offset`, `mean`, and `std`, each with 11 entries). Preprocessing is
+applied as `(raster * scale + offset - mean) / std` band by band. The values and
+evidence must come from the original training artifacts; the checksum only binds
+the manifest to the checkpoint and does not prove that its training claims are
+true. Review the provenance and validation evidence before enabling a model.
+
+The bundled GeoTIFFs can be opened as 11-band rasters, but their imagery and
+georeferencing are not verified. Use an authentic Sentinel-2 L2A GeoTIFF with
+bands ordered B1, B2, B3, B4, B5, B6, B7, B8, B8A, B11, B12 and the
+preprocessing recorded by the model's training artifact. When a verified model
+is available, results include a class-index GeoTIFF with the input CRS and
+affine transform; invalid input pixels are encoded as NoData value 255.
+
 ## API endpoints
 
 Interactive Swagger documentation is available at `/docs`. OpenAPI JSON is at

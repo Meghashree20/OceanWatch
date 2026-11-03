@@ -21,6 +21,7 @@ class SatelliteRasterMetadata(BaseModel):
     nodata: Optional[float] = None
     crs: Optional[str] = None
     bounds: Optional[List[float]] = None
+    transform: Optional[List[float]] = None
 
 
 class SatelliteClassStatistic(BaseModel):
@@ -45,6 +46,7 @@ class SatelliteAnalysisResponse(BaseModel):
     class_statistics: List[SatelliteClassStatistic] = Field(default_factory=list)
     preview_png_base64: str
     segmentation_mask_png_base64: str = ""
+    segmentation_mask_geotiff_base64: str = ""
     overlay_png_base64: str
     raster_metadata: Optional[SatelliteRasterMetadata] = None
     status: str = "success"
