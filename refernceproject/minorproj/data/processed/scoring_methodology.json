@@ -1,0 +1,37 @@
+{
+  "overview": "Composite scoring system using weighted multi-criteria analysis",
+  "components": {
+    "pollution_density": {
+      "weight": 0.35,
+      "description": "Current pollution level based on plastic weight",
+      "calculation": "Normalized plastic weight (0-100 scale)"
+    },
+    "trend_increase": {
+      "weight": 0.25,
+      "description": "Future pollution trend from forecasting",
+      "calculation": "Based on forecast trend direction and magnitude"
+    },
+    "environmental_impact": {
+      "weight": 0.2,
+      "description": "Ecological impact based on depth and location",
+      "calculation": "Combination of depth and biodiversity factors"
+    },
+    "plastic_type_risk": {
+      "weight": 0.15,
+      "description": "Environmental risk based on plastic type",
+      "calculation": "Risk scores based on persistence and toxicity"
+    },
+    "accessibility": {
+      "weight": 0.05,
+      "description": "Ease of cleanup based on depth and location",
+      "calculation": "Depth-based accessibility score"
+    }
+  },
+  "final_score": "Weighted sum of all components, normalized to 0-100 scale",
+  "categories": {
+    "Critical": "75-100",
+    "High": "50-75",
+    "Medium": "25-50",
+    "Low": "0-25"
+  }
+}

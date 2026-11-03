@@ -73,6 +73,39 @@ export interface HotspotList {
   limit: number;
 }
 
+export interface SatelliteRasterMetadata {
+  driver: string | null;
+  width: number;
+  height: number;
+  count: number;
+  crs: string | null;
+  bounds: number[] | null;
+}
+
+export interface SatelliteCatalogItem {
+  id: string;
+  name: string;
+  coordinates: number[];
+  description: string;
+  sample_file: string;
+  has_local_sample: boolean;
+}
+
+export interface SatelliteAnalysis {
+  id: string;
+  name: string;
+  coordinates: number[];
+  description: string;
+  sample_file: string | null;
+  debris_pixel_count: number;
+  total_pixels: number;
+  debris_coverage_percentage: number;
+  preview_png_base64: string;
+  overlay_png_base64: string;
+  raster_metadata: SatelliteRasterMetadata | null;
+  status: string;
+}
+
 export interface HotspotStats {
   total_clusters: number;
   total_observations_in_clusters: number;
@@ -273,6 +306,25 @@ export class OceanWatchApiClient {
 
   getHealth() {
     return this.requestJson<Record<string, unknown>>('/api/health', { signal: undefined });
+  }
+
+  getSatelliteCatalog() {
+    return this.requestJson<SatelliteCatalogItem[]>('/api/satellite/catalog', { signal: undefined });
+  }
+
+  analyzeSatellite(file: File) {
+    const body = new FormData();
+    body.append('file', file);
+    return this.requestJson<SatelliteAnalysis>('/api/satellite/analyze', {
+      method: 'POST',
+      body,
+    });
+  }
+
+  analyzeRegisteredSatellite(hotspotId: string) {
+    return this.requestJson<SatelliteAnalysis>(`/api/satellite/hotspots/${encodeURIComponent(hotspotId)}/analyze`, {
+      method: 'GET',
+    });
   }
 
   getHotspotStats() {

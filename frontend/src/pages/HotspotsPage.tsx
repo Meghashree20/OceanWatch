@@ -18,7 +18,7 @@ import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
 import { Card, CardBody, CardHeader } from '@/components/ui/Card';
 import { SectionHeader } from '@/components/ui/SectionHeader';
-import { PollutionMap } from '@/components/PollutionMap';
+import { DEFAULT_KDE_BANDWIDTH_KM, PollutionMap } from '@/components/PollutionMap';
 import { SharedFilterBar } from '@/components/SharedFilterBar';
 import { cn } from '@/lib/utils';
 import { oceanWatchApi, type Hotspot, type PollutionObservation } from '@/lib/api/client';
@@ -75,7 +75,7 @@ function toClusterData(hotspots: Hotspot[]): ClusterData[] {
 
 export function HotspotsPage() {
   const { filters, setFilters } = useDashboardFilters();
-  const [selectedCluster, setSelectedCluster] = useState<ClusterData | null>(null);
+  const [selectedHotspot, setSelectedHotspot] = useState<Hotspot | null>(null);
   const [clusters, setClusters] = useState<ClusterData[]>([]);
   const [hotspots, setHotspots] = useState<Hotspot[]>([]);
   const [observations, setObservations] = useState<PollutionObservation[]>([]);
@@ -84,6 +84,8 @@ export function HotspotsPage() {
   const [availableOceans, setAvailableOceans] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [showKde, setShowKde] = useState(true);
+  const [kdeBandwidthKm, setKdeBandwidthKm] = useState(DEFAULT_KDE_BANDWIDTH_KM);
 
   useEffect(() => {
     let active = true;
@@ -107,7 +109,6 @@ export function HotspotsPage() {
     let active = true;
     setLoading(true);
     setError(null);
-    setSelectedCluster(null);
     oceanWatchApi.getHotspots({
       limit: 500,
       region: filters.region !== 'ALL' ? filters.region : undefined,
@@ -118,6 +119,9 @@ export function HotspotsPage() {
         setHotspots(hotspotResponse.data);
         setClusters(toClusterData(hotspotResponse.data));
         setTotalClusters(hotspotResponse.total);
+        setSelectedHotspot((current) => current
+          ? hotspotResponse.data.find((hotspot) => hotspot.cluster_id === current.cluster_id) ?? null
+          : null);
       })
       .catch((requestError: Error) => {
         if (active) setError(requestError.message);
@@ -192,20 +196,31 @@ export function HotspotsPage() {
         {/* Map + cluster details */}
         <div className="mt-8 grid gap-6 lg:grid-cols-[1fr_22rem]">
           <RealHotspotMap
-            clusters={clusters}
             hotspots={hotspots}
             observations={observations}
             setFilters={setFilters}
             loading={loading}
             error={error}
-            selectedCluster={selectedCluster}
-            onSelectCluster={setSelectedCluster}
+            showKde={showKde}
+            kdeBandwidthKm={kdeBandwidthKm}
+            onKdeBandwidthChange={setKdeBandwidthKm}
+            onToggleKde={() => setShowKde((visible) => !visible)}
+            kdeAvailable={observations.filter((observation) => (
+              Number.isFinite(observation.latitude)
+              && Number.isFinite(observation.longitude)
+              && observation.latitude >= -90
+              && observation.latitude <= 90
+              && observation.longitude >= -180
+              && observation.longitude <= 180
+            )).length >= 2}
+            selectedHotspot={selectedHotspot}
+            onSelectHotspot={setSelectedHotspot}
           />
-          <ClusterDetailsPanel cluster={selectedCluster} onClose={() => setSelectedCluster(null)} />
+          <ClusterDetailsPanel hotspot={selectedHotspot} onClose={() => setSelectedHotspot(null)} />
         </div>
 
         {/* Legend */}
-        <MapLegend />
+        <MapLegend showKde={showKde} />
 
       </div>
     </div>
@@ -250,23 +265,31 @@ function SummaryStat({
 /* ------------------------------------------------------------------ */
 
 function RealHotspotMap({
-  clusters,
   hotspots,
   observations,
   setFilters,
-  selectedCluster,
-  onSelectCluster,
+  selectedHotspot,
+  onSelectHotspot,
   loading,
   error,
+  showKde,
+  kdeBandwidthKm,
+  onKdeBandwidthChange,
+  onToggleKde,
+  kdeAvailable,
 }: {
-  clusters: ClusterData[];
   hotspots: Hotspot[];
   observations: PollutionObservation[];
   setFilters: React.Dispatch<React.SetStateAction<DashboardFilters>>;
-  selectedCluster: ClusterData | null;
-  onSelectCluster: (cluster: ClusterData | null) => void;
+  selectedHotspot: Hotspot | null;
+  onSelectHotspot: (hotspot: Hotspot | null) => void;
   loading: boolean;
   error: string | null;
+  showKde: boolean;
+  kdeBandwidthKm: number;
+  onKdeBandwidthChange: (bandwidthKm: number) => void;
+  onToggleKde: () => void;
+  kdeAvailable: boolean;
 }) {
   return (
     <Card className="overflow-hidden">
@@ -279,7 +302,21 @@ function RealHotspotMap({
             <h3 className="text-sm font-bold text-navy-950">Pollution map</h3>
             <Badge variant="neutral">{loading ? 'Loading' : error ? 'Unavailable' : `${observations.length} observations · ${hotspots.length} hotspots`}</Badge>
           </div>
-          {selectedCluster && <Button variant="ghost" size="sm" className="px-2 text-xs" onClick={() => onSelectCluster(null)}>Reset</Button>}
+          <div className="flex items-center gap-2">
+            <select
+              value={kdeBandwidthKm}
+              onChange={(event) => onKdeBandwidthChange(Number(event.target.value))}
+              disabled={!kdeAvailable}
+              className="rounded border border-ocean-200 bg-white px-2 py-1.5 text-[11px] text-ocean-700 disabled:opacity-50"
+              aria-label="KDE bandwidth in kilometers"
+            >
+              {[25, 50, 100].map((bandwidth) => <option key={bandwidth} value={bandwidth}>{bandwidth} km KDE</option>)}
+            </select>
+            <Button variant="ghost" size="sm" className="px-2 text-xs" onClick={onToggleKde} disabled={!kdeAvailable}>
+              {showKde ? 'Hide KDE' : 'Show KDE'}
+            </Button>
+            {selectedHotspot && <Button variant="ghost" size="sm" className="px-2 text-xs" onClick={() => onSelectHotspot(null)}>Reset</Button>}
+          </div>
         </div>
       </CardHeader>
       <CardBody className="p-0">
@@ -297,16 +334,20 @@ function RealHotspotMap({
           <PollutionMap
             observations={observations}
             hotspots={hotspots}
-            selectedHotspotId={selectedCluster?.id ?? null}
+            showKde={showKde}
+            kdeBandwidthKm={kdeBandwidthKm}
+            selectedHotspotId={selectedHotspot ? String(selectedHotspot.cluster_id) : null}
             onSelectHotspot={(hotspot) => {
-              const cluster = clusters.find((item) => item.id === String(hotspot.cluster_id));
-              if (cluster) {
-                onSelectCluster(cluster);
-                const region = hotspot.region ?? hotspot.dominant_region;
-                if (region) setFilters((current) => ({ ...current, region }));
-              }
+              onSelectHotspot(hotspot);
+              const region = hotspot.region ?? hotspot.dominant_region;
+              if (region) setFilters((current) => ({ ...current, region }));
             }}
           />
+        )}
+        {!loading && !error && showKde && !kdeAvailable && (
+          <p className="border-t border-ocean-100 bg-ocean-50 px-4 py-2 text-xs text-ocean-500">
+            KDE density is unavailable: at least two valid observation coordinates are required.
+          </p>
         )}
       </CardBody>
     </Card>
@@ -318,23 +359,23 @@ function RealHotspotMap({
 /* ------------------------------------------------------------------ */
 
 function ClusterDetailsPanel({
-  cluster,
+  hotspot,
   onClose,
 }: {
-  cluster: ClusterData | null;
+  hotspot: Hotspot | null;
   onClose: () => void;
 }) {
   return (
-    <Card className={cn('transition-all duration-300', !cluster && 'opacity-60')}>
+    <Card className={cn('transition-all duration-300', !hotspot && 'opacity-60')}>
       <CardHeader>
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2.5">
             <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-cyan-100 text-cyan-700">
               <Radio className="h-4 w-4" />
             </div>
-            <h3 className="text-sm font-bold text-navy-950">Cluster details</h3>
+            <h3 className="text-sm font-bold text-navy-950">Hotspot details</h3>
           </div>
-          {cluster && (
+          {hotspot && (
             <button
               type="button"
               onClick={onClose}
@@ -347,51 +388,58 @@ function ClusterDetailsPanel({
         </div>
       </CardHeader>
       <CardBody>
-        {cluster ? (
+        {hotspot ? (
           <div className="space-y-1">
             {/* Cluster header */}
             <div className="mb-4 flex items-center gap-3 rounded-xl border border-ocean-100 bg-ocean-50 p-4">
               <div
                 className="h-10 w-10 shrink-0 rounded-full border-2"
                 style={{
-                  backgroundColor: cluster.color,
-                  borderColor: cluster.ringColor,
+                  backgroundColor: 'rgba(34, 211, 238, 0.16)',
+                  borderColor: 'rgba(34, 211, 238, 0.65)',
                 }}
               />
               <div>
-                <p className="font-mono text-xs text-cyan-600">{cluster.id}</p>
-                <p className="text-sm font-bold text-navy-950">{cluster.label}</p>
+                <p className="font-mono text-xs text-cyan-600">{hotspot.hotspot_id ?? `C-${hotspot.cluster_id}`}</p>
+                <p className="text-sm font-bold text-navy-950">{hotspot.label}</p>
               </div>
             </div>
 
             {/* Detail rows */}
-            <DetailRow icon={CircleDot} label="Cluster ID" value={cluster.id} mono />
-            <DetailRow icon={Database} label="Observations" value={String(cluster.observations)} mono />
+            <DetailRow icon={CircleDot} label="Hotspot ID" value={hotspot.hotspot_id ?? `C-${hotspot.cluster_id}`} mono />
+            <DetailRow icon={Activity} label="Severity" value={hotspot.severity} />
+            <DetailRow icon={Database} label="Observations" value={hotspot.observation_count.toLocaleString()} mono />
             <DetailRow
               icon={MapPin}
               label="Center latitude"
-              value={`${cluster.centerLat.toFixed(2)}°`}
+              value={`${hotspot.centroid.latitude.toFixed(2)}°`}
               mono
             />
             <DetailRow
               icon={MapPin}
               label="Center longitude"
-              value={`${cluster.centerLon.toFixed(2)}°`}
+              value={`${hotspot.centroid.longitude.toFixed(2)}°`}
               mono
             />
             <DetailRow
               icon={Activity}
               label="Avg concentration"
-              value={`${cluster.avgConcentration.toFixed(2)} pieces/m³`}
+              value={`${hotspot.average_pollution.toFixed(2)} pieces/m³`}
               mono
             />
             <DetailRow
               icon={Gauge}
               label="Max concentration"
-              value={`${cluster.maxConcentration.toFixed(1)} pieces/m³`}
+              value={`${hotspot.maximum_pollution.toFixed(2)} pieces/m³`}
               mono
             />
-            <DetailRow icon={CalendarRange} label="Date range" value={cluster.dateRange} />
+            <DetailRow icon={MapPin} label="Region" value={hotspot.region ?? hotspot.dominant_region ?? '—'} />
+            <DetailRow icon={MapPin} label="Ocean" value={hotspot.ocean ?? '—'} />
+            <DetailRow
+              icon={CalendarRange}
+              label="Date range"
+              value={`${hotspot.date_start ?? hotspot.date_range.start ?? '—'} to ${hotspot.date_end ?? hotspot.date_range.end ?? '—'}`}
+            />
           </div>
         ) : (
           <div className="flex flex-col items-center justify-center py-12 text-center">
@@ -399,12 +447,10 @@ function ClusterDetailsPanel({
               <Crosshair className="h-5 w-5" />
             </div>
             <p className="mt-4 text-sm font-medium text-ocean-600">
-              No cluster selected
+              No hotspot selected
             </p>
             <p className="mt-1.5 max-w-[16rem] text-xs text-ocean-400">
-              Click a hotspot region on the map to view its cluster details.
-              This panel will display DBSCAN results from the backend once
-              connected.
+              Select a hotspot marker on the map to view its backend details.
             </p>
           </div>
         )}
@@ -441,12 +487,13 @@ function DetailRow({
 /* Map legend                                                            */
 /* ------------------------------------------------------------------ */
 
-function MapLegend() {
+function MapLegend({ showKde }: { showKde: boolean }) {
   const items = [
     { label: 'Core point', description: 'Dense observation within a cluster', dot: 'bg-cyan-400 border-navy-950' },
     { label: 'Border point', description: 'Edge of a cluster boundary', dot: 'bg-teal-400 border-navy-950' },
     { label: 'Noise point', description: 'Outlier — not assigned to any cluster', dot: 'bg-ocean-400/50 border-ocean-500' },
-    { label: 'Hotspot region', description: 'DBSCAN cluster boundary', dot: 'border-cyan-400 bg-cyan-100/40' },
+    { label: 'DBSCAN hotspot', description: 'Potential pollution cluster', dot: 'border-cyan-400 bg-cyan-100/40' },
+    ...(showKde ? [{ label: 'KDE density', description: 'Relative observation density estimate', dot: 'border-orange-400 bg-orange-400/50' }] : []),
   ];
 
   return (

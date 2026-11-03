@@ -8,6 +8,7 @@ import {
   LayoutDashboard,
   Target,
   TrendingUp,
+  Satellite,
   type LucideIcon,
 } from 'lucide-react';
 
@@ -31,6 +32,7 @@ export const navItems: NavItem[] = [
   { label: 'Pollution Forecast', shortLabel: 'Forecast', path: '/forecast', description: 'Predictive pollution concentration models', icon: TrendingUp },
   { label: 'Cleanup Priority', shortLabel: 'Priority', path: '/priority', description: 'Weighted decision-support scoring', icon: Target },
   { label: 'Ocean Intelligence', shortLabel: 'Intelligence', path: '/intelligence', description: 'Integrated marine intelligence dashboard', icon: LayoutDashboard },
+  { label: 'Satellite Analysis', shortLabel: 'Satellite', path: '/satellite', description: 'U-Net debris segmentation from GeoTIFF imagery', icon: Satellite },
   { label: 'Data Explorer', shortLabel: 'Data', path: '/data', description: 'Query and filter raw observation data', icon: Database },
   { label: 'Model Insights', shortLabel: 'Models', path: '/models', description: 'ML model performance and architecture', icon: BarChart3 },
   { label: 'About OceanWatch', shortLabel: 'About', path: '/about', description: 'About the OceanWatch project', icon: Info },
@@ -47,6 +49,7 @@ export const platformNavItems: NavItem[] = [
   navItems[3], // Forecast
   navItems[4], // Priority
   navItems[5], // Intelligence
+  navItems[9], // Satellite
 ];
 
 export const secondaryNavItems: NavItem[] = [
@@ -58,7 +61,7 @@ export const secondaryNavItems: NavItem[] = [
 // Mobile nav groups
 export const mobileNavGroups: NavGroup[] = [
   { label: 'Platform', items: [navItems[0], ...platformNavItems] },
-  { label: 'Insights', items: [navItems[6], navItems[7]] },
+  { label: 'Insights', items: [navItems[6], navItems[7], navItems[9]] },
   { label: 'Project', items: [navItems[8]] },
 ];
 
@@ -69,7 +72,7 @@ export const footerNavGroups: NavGroup[] = [
   },
   {
     label: 'Insights',
-    items: [navItems[6], navItems[7]],
+    items: [navItems[6], navItems[7], navItems[9]],
   },
   {
     label: 'Project',

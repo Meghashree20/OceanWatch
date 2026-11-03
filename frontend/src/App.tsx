@@ -6,6 +6,7 @@ import { ForecastPage } from '@/pages/ForecastPage';
 import { PriorityPage } from '@/pages/PriorityPage';
 import { DataExplorerPage } from '@/pages/DataExplorerPage';
 import { IntelligencePage } from '@/pages/IntelligencePage';
+import { SatellitePage } from '@/pages/SatellitePage';
 import { PlatformPage, type PlatformPageConfig } from '@/pages/PlatformPage';
 import { DashboardFiltersProvider } from '@/lib/dashboardFilters';
 
@@ -67,6 +68,7 @@ function App() {
           <Route path="/priority" element={<PriorityPage />} />
           <Route path="/data" element={<DataExplorerPage />} />
           <Route path="/intelligence" element={<IntelligencePage />} />
+          <Route path="/satellite" element={<SatellitePage />} />
           {Object.entries(pageConfigs)
             .filter(([slug]) => slug !== 'hotspots' && slug !== 'forecast' && slug !== 'priority' && slug !== 'data' && slug !== 'intelligence')
             .map(([slug, config]) => (
