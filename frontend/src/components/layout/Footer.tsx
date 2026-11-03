@@ -1,6 +1,6 @@
 import { ArrowUpRight, Mail } from 'lucide-react';
 import { Link } from 'react-router-dom';
-import { footerNavGroups } from '@/lib/navigation';
+import { publicFooterNavGroups } from '@/lib/navigation';
 import { Logo } from '@/components/layout/Navbar';
 
 export function Footer() {
@@ -27,7 +27,7 @@ export function Footer() {
 
           {/* Nav groups */}
           <div className="grid grid-cols-2 gap-8 sm:grid-cols-3">
-            {footerNavGroups.map((group) => (
+            {publicFooterNavGroups.map((group) => (
               <div key={group.label}>
                 <h3 className="text-xs font-semibold uppercase tracking-wider text-ocean-400">
                   {group.label}

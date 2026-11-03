@@ -67,7 +67,7 @@ export const mobileNavGroups: NavGroup[] = [
   { label: 'Project', items: [navItems[8]] },
 ];
 
-export const publicNavItems: NavItem[] = [navItems[0], navItems[8], navItems[7]];
+export const publicNavItems: NavItem[] = [navItems[0], navItems[8]];
 
 export const footerNavGroups: NavGroup[] = [
   {
@@ -78,6 +78,13 @@ export const footerNavGroups: NavGroup[] = [
     label: 'Insights',
     items: [navItems[6], navItems[7], navItems[9]],
   },
+  {
+    label: 'Project',
+    items: [navItems[0], navItems[8]],
+  },
+];
+
+export const publicFooterNavGroups: NavGroup[] = [
   {
     label: 'Project',
     items: [navItems[0], navItems[8]],

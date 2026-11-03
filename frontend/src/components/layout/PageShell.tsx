@@ -11,13 +11,15 @@ interface PageShellProps {
 }
 
 export function PublicLayout({ className }: PageShellProps) {
+  const isLandingPage = useLocation().pathname === '/';
+
   return (
     <div className={cn('flex min-h-screen flex-col', className)}>
       <PublicNavbar />
       <main className="flex-1">
         <RouteTransition><Outlet /></RouteTransition>
       </main>
-      <Footer />
+      {!isLandingPage && <Footer />}
     </div>
   );
 }
