@@ -1,23 +1,44 @@
 import { type ReactNode, useEffect, useState } from 'react';
-import { useLocation } from 'react-router-dom';
-import { Navbar, Breadcrumbs } from '@/components/layout/Navbar';
+import { Outlet, useLocation } from 'react-router-dom';
+import { DashboardNavbar, PublicNavbar, Breadcrumbs } from '@/components/layout/Navbar';
 import { Footer } from '@/components/layout/Footer';
 import { breadcrumbLabels } from '@/lib/navigation';
 import { cn } from '@/lib/utils';
 
 interface PageShellProps {
-  children: ReactNode;
+  children?: ReactNode;
   className?: string;
 }
 
-export function PageShell({ children, className }: PageShellProps) {
+export function PublicLayout({ className }: PageShellProps) {
   return (
     <div className={cn('flex min-h-screen flex-col', className)}>
-      <Navbar />
+      <PublicNavbar />
       <main className="flex-1">
-        <RouteTransition>{children}</RouteTransition>
+        <RouteTransition><Outlet /></RouteTransition>
       </main>
       <Footer />
+    </div>
+  );
+}
+
+export function DashboardLayout({ className }: PageShellProps) {
+  return (
+    <div className={cn('flex min-h-screen flex-col', className)}>
+      <DashboardNavbar />
+      <main className="flex-1">
+        <RouteTransition><Outlet /></RouteTransition>
+      </main>
+    </div>
+  );
+}
+
+export function AuthPageLayout({ className }: PageShellProps) {
+  return (
+    <div className={cn('flex min-h-screen flex-col', className)}>
+      <main className="flex-1">
+        <RouteTransition><Outlet /></RouteTransition>
+      </main>
     </div>
   );
 }

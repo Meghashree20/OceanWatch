@@ -1,6 +1,6 @@
 import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom';
 import { ProtectedRoute } from '@/components/auth/ProtectedRoute';
-import { PageShell } from '@/components/layout/PageShell';
+import { AuthPageLayout, DashboardLayout, PublicLayout } from '@/components/layout/PageShell';
 import { HomePage } from '@/pages/HomePage';
 import { HotspotsPage } from '@/pages/HotspotsPage';
 import { ForecastPage } from '@/pages/ForecastPage';
@@ -65,28 +65,29 @@ function App() {
     <BrowserRouter>
       <AuthProvider>
         <DashboardFiltersProvider>
-          <PageShell>
-            <Routes>
-          <Route path="/" element={<HomePage />} />
-          <Route path="/login" element={<LoginPage />} />
-          <Route path="/signup" element={<SignupPage />} />
-          <Route element={<ProtectedRoute />}>
-            <Route path="/explore" element={<PlatformPage config={pageConfigs.explore} />} />
-            <Route path="/hotspots" element={<HotspotsPage />} />
-            <Route path="/forecast" element={<ForecastPage />} />
-            <Route path="/priority" element={<PriorityPage />} />
-            <Route path="/data" element={<DataExplorerPage />} />
-            <Route path="/intelligence" element={<IntelligencePage />} />
-            <Route path="/satellite" element={<SatellitePage />} />
-          </Route>
-          {Object.entries(pageConfigs)
-            .filter(([slug]) => !['explore', 'hotspots', 'forecast', 'priority', 'data', 'intelligence'].includes(slug))
-            .map(([slug, config]) => (
-              <Route key={slug} path={`/${slug}`} element={<PlatformPage config={config} />} />
-            ))}
-          <Route path="*" element={<Navigate to="/" replace />} />
-            </Routes>
-          </PageShell>
+          <Routes>
+            <Route element={<PublicLayout />}>
+              <Route path="/" element={<HomePage />} />
+              <Route path="/about" element={<PlatformPage config={pageConfigs.about} />} />
+              <Route path="/models" element={<PlatformPage config={pageConfigs.models} />} />
+            </Route>
+            <Route element={<AuthPageLayout />}>
+              <Route path="/login" element={<LoginPage />} />
+              <Route path="/signup" element={<SignupPage />} />
+            </Route>
+            <Route element={<ProtectedRoute />}>
+              <Route element={<DashboardLayout />}>
+                <Route path="/explore" element={<PlatformPage config={pageConfigs.explore} />} />
+                <Route path="/hotspots" element={<HotspotsPage />} />
+                <Route path="/forecast" element={<ForecastPage />} />
+                <Route path="/priority" element={<PriorityPage />} />
+                <Route path="/intelligence" element={<IntelligencePage />} />
+                <Route path="/data" element={<DataExplorerPage />} />
+                <Route path="/satellite" element={<SatellitePage />} />
+              </Route>
+            </Route>
+            <Route path="*" element={<Navigate to="/" replace />} />
+          </Routes>
         </DashboardFiltersProvider>
       </AuthProvider>
     </BrowserRouter>

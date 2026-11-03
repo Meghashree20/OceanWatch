@@ -1,7 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
-import { Link, NavLink, useLocation } from 'react-router-dom';
+import { Link, NavLink, useLocation, useNavigate } from 'react-router-dom';
 import {
-  ArrowUpRight,
   ChevronDown,
   LogOut,
   Menu,
@@ -10,8 +9,8 @@ import {
 } from 'lucide-react';
 import {
   breadcrumbLabels,
-  mobileNavGroups,
-  platformNavItems,
+  dashboardPlatformNavItems,
+  publicNavItems,
   type NavItem,
 } from '@/lib/navigation';
 import { Button } from '@/components/ui/Button';
@@ -41,11 +40,19 @@ export function Logo({ light = false }: { light?: boolean }) {
   );
 }
 
-export function Navbar() {
+export function DashboardNavbar() {
   const [mobileOpen, setMobileOpen] = useState(false);
   const [scrolled, setScrolled] = useState(false);
   const location = useLocation();
+  const navigate = useNavigate();
   const { user, status, logout } = useAuth();
+  const handleLogout = async () => {
+    try {
+      await logout();
+    } finally {
+      navigate('/');
+    }
+  };
 
   useEffect(() => {
     const onScroll = () => setScrolled(window.scrollY > 8);
@@ -84,24 +91,8 @@ export function Navbar() {
         <Logo />
 
         {/* Desktop nav */}
-        <nav className="hidden items-center gap-0.5 lg:flex" aria-label="Primary navigation">
-          <NavLink to="/" end className={navLinkClass}>
-            Home
-          </NavLink>
-
-          {/* Platform dropdown */}
-          <PlatformDropdown />
-
-          {/* Direct secondary links */}
-          <NavLink to="/data" className={navLinkClass}>
-            Data
-          </NavLink>
-          <NavLink to="/models" className={navLinkClass}>
-            Models
-          </NavLink>
-          <NavLink to="/about" className={navLinkClass}>
-            About
-          </NavLink>
+        <nav className="hidden items-center gap-0.5 lg:flex" aria-label="Dashboard navigation">
+          <PlatformDropdown items={dashboardPlatformNavItems} />
         </nav>
 
         {/* CTA + mobile toggle */}
@@ -111,7 +102,7 @@ export function Navbar() {
               <span className="max-w-32 truncate text-sm font-medium text-navy-800">{user.full_name}</span>
               <button
                 type="button"
-                onClick={() => void logout()}
+                onClick={() => void handleLogout()}
                 className="inline-flex items-center gap-1.5 rounded-lg px-3 py-2 text-sm font-semibold text-ocean-700 hover:bg-ocean-100 hover:text-navy-950"
               >
                 <LogOut className="h-4 w-4" />
@@ -121,12 +112,6 @@ export function Navbar() {
           ) : status === 'unauthenticated' ? (
             <Button to="/login" size="sm" variant="outline" className="hidden sm:inline-flex">Sign in</Button>
           ) : null}
-          {status !== 'authenticated' && (
-            <Button to="/intelligence" size="sm" className="hidden lg:inline-flex">
-              Explore Intelligence
-              <ArrowUpRight className="h-4 w-4" />
-            </Button>
-          )}
           <button
             type="button"
             onClick={() => setMobileOpen((open) => !open)}
@@ -140,8 +125,95 @@ export function Navbar() {
         </div>
       </div>
 
-      {/* Mobile nav */}
+      {/* Mobile dashboard nav */}
       {mobileOpen && <MobileNav />}
+    </header>
+  );
+}
+
+export function PublicNavbar() {
+  const [mobileOpen, setMobileOpen] = useState(false);
+  const [scrolled, setScrolled] = useState(false);
+  const location = useLocation();
+
+  useEffect(() => {
+    const onScroll = () => setScrolled(window.scrollY > 8);
+    onScroll();
+    window.addEventListener('scroll', onScroll, { passive: true });
+    return () => window.removeEventListener('scroll', onScroll);
+  }, []);
+
+  useEffect(() => {
+    setMobileOpen(false);
+  }, [location.pathname]);
+
+  useEffect(() => {
+    document.body.style.overflow = mobileOpen ? 'hidden' : '';
+    return () => {
+      document.body.style.overflow = '';
+    };
+  }, [mobileOpen]);
+
+  return (
+    <header
+      className={cn(
+        'sticky top-0 z-50 transition-all duration-300',
+        scrolled
+          ? 'border-b border-ocean-200/80 bg-ocean-50/95 shadow-sm backdrop-blur-xl'
+          : 'border-b border-transparent bg-ocean-50/80 backdrop-blur-md'
+      )}
+    >
+      <div className="container-page flex h-16 items-center justify-between">
+        <Logo />
+        <nav className="hidden items-center gap-0.5 lg:flex" aria-label="Public navigation">
+          {publicNavItems.map((item) => (
+            <NavLink key={item.path} to={item.path} end={item.path === '/'} className={navLinkClass}>
+              {item.shortLabel}
+            </NavLink>
+          ))}
+        </nav>
+        <div className="flex items-center gap-2">
+          <Button to="/login" size="sm" variant="outline" className="hidden sm:inline-flex">
+            Sign in
+          </Button>
+          <Button to="/signup" size="sm" className="hidden sm:inline-flex">
+            Create account
+          </Button>
+          <button
+            type="button"
+            onClick={() => setMobileOpen((open) => !open)}
+            className="rounded-lg p-2 text-navy-800 transition-colors hover:bg-ocean-100 lg:hidden"
+            aria-label={mobileOpen ? 'Close menu' : 'Open menu'}
+            aria-expanded={mobileOpen}
+            aria-controls="public-mobile-nav"
+          >
+            {mobileOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
+          </button>
+        </div>
+      </div>
+      {mobileOpen && (
+        <div
+          id="public-mobile-nav"
+          className="fixed inset-x-0 top-16 bottom-0 z-40 overflow-y-auto bg-ocean-50 lg:hidden"
+        >
+          <nav className="container-page py-6" aria-label="Mobile public navigation">
+            <div className="overflow-hidden rounded-xl border border-ocean-200 bg-white">
+              {publicNavItems.map((item, index) => (
+                <MobileNavLink
+                  key={item.path}
+                  item={item}
+                  active={location.pathname === item.path}
+                  isFirst={index === 0}
+                />
+              ))}
+            </div>
+            <div className="mt-4 grid gap-3 sm:grid-cols-2">
+              <Button to="/login" size="lg" variant="outline" className="w-full">Sign in</Button>
+              <Button to="/signup" size="lg" className="w-full">Create account</Button>
+            </div>
+          </nav>
+        </div>
+      )}
     </header>
   );
 }
@@ -159,13 +231,13 @@ function navLinkClass({ isActive }: { isActive: boolean }) {
 /* Platform dropdown                                                   */
 /* ------------------------------------------------------------------ */
 
-function PlatformDropdown() {
+function PlatformDropdown({ items }: { items: NavItem[] }) {
   const [open, setOpen] = useState(false);
   const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const location = useLocation();
 
   // Check if any platform item is active
-  const isPlatformActive = platformNavItems.some(
+  const isPlatformActive = items.some(
     (item) => location.pathname === item.path
   );
 
@@ -220,7 +292,7 @@ function PlatformDropdown() {
                 </p>
               </div>
               <div className="p-2">
-                {platformNavItems.map((item) => {
+                {items.map((item) => {
                   const Icon = item.icon;
                   const active = location.pathname === item.path;
                   return (
@@ -269,7 +341,16 @@ function PlatformDropdown() {
 
 function MobileNav() {
   const location = useLocation();
+  const navigate = useNavigate();
   const { user, status, logout } = useAuth();
+  const handleLogout = async () => {
+    try {
+      await logout();
+    } finally {
+      navigate('/');
+    }
+  };
+  const groups = [{ label: 'Platform', items: dashboardPlatformNavItems }];
 
   return (
     <div
@@ -277,7 +358,7 @@ function MobileNav() {
       className="fixed inset-x-0 top-16 bottom-0 z-40 overflow-y-auto bg-ocean-50 lg:hidden"
     >
       <nav className="container-page py-6" aria-label="Mobile navigation">
-        {mobileNavGroups.map((group) => (
+        {groups.map((group) => (
           <div key={group.label} className="mb-6">
             <p className="mb-2 px-1 text-[10px] font-semibold uppercase tracking-wider text-ocean-500">
               {group.label}
@@ -299,7 +380,7 @@ function MobileNav() {
           {status === 'authenticated' && user ? (
             <button
               type="button"
-              onClick={() => void logout()}
+              onClick={() => void handleLogout()}
               className="inline-flex w-full items-center justify-center gap-2 rounded-xl border border-ocean-300 bg-white px-5 py-3.5 text-sm font-semibold text-navy-800"
             >
               <LogOut className="h-4 w-4" />

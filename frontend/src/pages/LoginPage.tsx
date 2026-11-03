@@ -1,4 +1,4 @@
-import { Link, Navigate, useLocation, useNavigate } from 'react-router-dom';
+import { Link, Navigate, useNavigate } from 'react-router-dom';
 import { useState, type FormEvent } from 'react';
 import { AuthInput, AuthLayout, PasswordInput, SubmitButton } from '@/components/auth/AuthForm';
 import { ApiClientError } from '@/lib/api/client';
@@ -7,7 +7,6 @@ import { useAuth } from '@/lib/authContext';
 export function LoginPage() {
   const { login, status } = useAuth();
   const navigate = useNavigate();
-  const location = useLocation();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
@@ -27,8 +26,7 @@ export function LoginPage() {
     setLoading(true);
     try {
       await login(email.trim(), password);
-      const from = (location.state as { from?: string } | null)?.from ?? '/intelligence';
-      navigate(from, { replace: true });
+      navigate('/intelligence', { replace: true });
     } catch (requestError) {
       setError(requestError instanceof ApiClientError ? requestError.message : 'Unable to sign in. Please try again.');
     } finally {
@@ -53,7 +51,5 @@ export function LoginPage() {
 }
 
 function RedirectToDestination() {
-  const location = useLocation();
-  const from = (location.state as { from?: string } | null)?.from ?? '/intelligence';
-  return <Navigate to={from} replace />;
+  return <Navigate to="/intelligence" replace />;
 }

@@ -52,6 +52,8 @@ export const platformNavItems: NavItem[] = [
   navItems[9], // Satellite
 ];
 
+export const dashboardPlatformNavItems: NavItem[] = platformNavItems.slice(0, 5);
+
 export const secondaryNavItems: NavItem[] = [
   navItems[6], // Data
   navItems[7], // Models
@@ -64,6 +66,8 @@ export const mobileNavGroups: NavGroup[] = [
   { label: 'Insights', items: [navItems[6], navItems[7], navItems[9]] },
   { label: 'Project', items: [navItems[8]] },
 ];
+
+export const publicNavItems: NavItem[] = [navItems[0], navItems[8], navItems[7]];
 
 export const footerNavGroups: NavGroup[] = [
   {
