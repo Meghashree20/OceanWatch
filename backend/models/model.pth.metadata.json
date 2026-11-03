@@ -1,0 +1,104 @@
+{
+  "format_version": 1,
+  "checkpoint_sha256": "7a690027cf279b31cae45a3188f2d4faa011b222f42b5e92c9ec6b1fd46d1b37",
+  "task": "marine_plastic_segmentation",
+  "architecture": {
+    "name": "UNet",
+    "input_bands": 11,
+    "output_classes": 11,
+    "hidden_channels": 16
+  },
+  "band_order": [
+    "B1",
+    "B2",
+    "B3",
+    "B4",
+    "B5",
+    "B6",
+    "B7",
+    "B8",
+    "B8A",
+    "B11",
+    "B12"
+  ],
+  "class_names": [
+    "Marine Debris",
+    "Dense Sargassum",
+    "Sparse Sargassum",
+    "Natural Organic Material",
+    "Ship",
+    "Clouds",
+    "Marine Water",
+    "Sediment-Laden Water",
+    "Foam",
+    "Turbid Water",
+    "Shallow Water"
+  ],
+  "training": {
+    "dataset": "MARIDA",
+    "provenance": "Official MARIDA U-Net release, checkpoint MARIDA_models/unet/trained_models/44/model.pth, linked by https://github.com/marine-debris/marine-debris.github.io/blob/8de83a3394edfbe867d9fa825439666369ec6282/README.md. The upstream U-Net, dataloader, class mappings, and evaluation code are at the same repository revision. Dataset: https://doi.org/10.5281/zenodo.5151941.",
+    "validation_evidence": "The upstream repository provides semantic_segmentation/unet/evaluation.py for held-out test-split evaluation but does not publish an aggregate evaluation log with this checkpoint. A separate smoke test against official test ROI 12-12-20_16PCC_0 covered only 13 labeled pixels (2 Marine Debris); this is not a performance estimate."
+  },
+  "preprocessing": {
+    "scale": [
+      1.0,
+      1.0,
+      1.0,
+      1.0,
+      1.0,
+      1.0,
+      1.0,
+      1.0,
+      1.0,
+      1.0,
+      1.0
+    ],
+    "offset": [
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0
+    ],
+    "mean": [
+      0.05197577,
+      0.04783991,
+      0.04056812,
+      0.03163572,
+      0.02972606,
+      0.03457443,
+      0.03875053,
+      0.03436435,
+      0.0392113,
+      0.02358126,
+      0.01588816
+    ],
+    "std": [
+      0.04725893,
+      0.04743808,
+      0.04699043,
+      0.04967381,
+      0.04946782,
+      0.06458357,
+      0.07594915,
+      0.07120246,
+      0.08251058,
+      0.05111466,
+      0.03524419
+    ]
+  },
+  "upstream": {
+    "repository": "https://github.com/marine-debris/marine-debris.github.io",
+    "revision": "8de83a3394edfbe867d9fa825439666369ec6282",
+    "checkpoint_archive": "https://pithos.okeanos.grnet.gr/public/lxh8hL4zvuSKds2BdVnMd2",
+    "checkpoint_path": "MARIDA_models/unet/trained_models/44/model.pth",
+    "model_code_license": "MIT",
+    "dataset_license": "CC-BY-4.0"
+  }
+}

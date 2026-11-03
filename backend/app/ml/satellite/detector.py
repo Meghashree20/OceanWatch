@@ -180,6 +180,9 @@ class DebrisDetector:
                 f"Got shape {tuple(image.shape)}."
             )
         height, width = image.shape[-2:]
+        image = image.to(device=self.device, dtype=torch.float32)
+        image = torch.where(torch.isfinite(image), image, self.preprocessing["mean"])
+
         padded_height = max(32, ((height + 15) // 16) * 16)
         padded_width = max(32, ((width + 15) // 16) * 16)
         pad_bottom = padded_height - height
@@ -187,7 +190,6 @@ class DebrisDetector:
         if pad_bottom or pad_right:
             image = torch.nn.functional.pad(image, (0, pad_right, 0, pad_bottom), mode="replicate")
 
-        image = image.to(device=self.device, dtype=torch.float32)
         image = (
             (image * self.preprocessing["scale"] + self.preprocessing["offset"] - self.preprocessing["mean"])
             / self.preprocessing["std"]

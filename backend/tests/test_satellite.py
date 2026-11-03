@@ -2,6 +2,7 @@
 
 from pathlib import Path
 import base64
+import shutil
 
 import numpy as np
 import pytest
@@ -11,14 +12,22 @@ from rasterio.io import MemoryFile
 from rasterio.transform import from_origin
 from starlette.testclient import TestClient
 
-from app.main import app
 from app.ml.satellite.detector import DebrisDetector
 from app.ml.satellite.unet import UNet
 from app.schemas.satellite import SatelliteRasterMetadata
 from app.services.satellite_service import SatelliteService
 
-SAMPLE_TIF = Path(__file__).resolve().parents[1] / "samples" / "accra-coast.tif"
+FIXTURE_DIR = Path(__file__).resolve().parent / "fixtures" / "marida"
+SAMPLE_TIF = FIXTURE_DIR / "S2_12-12-20_16PCC_0.tif"
 MODEL_PATH = Path(__file__).resolve().parents[1] / "models" / "model.pth"
+CLASS_NAMES = [
+    "Marine Debris", "Dense Sargassum", "Sparse Sargassum",
+    "Natural Organic Material", "Ship", "Clouds", "Marine Water",
+    "Sediment-Laden Water", "Foam", "Turbid Water", "Shallow Water",
+]
+BAND_ORDER = ["B1", "B2", "B3", "B4", "B5", "B6", "B7", "B8", "B8A", "B11", "B12"]
+
+
 @pytest.fixture(scope="module")
 def client(authenticated_app):
     with TestClient(authenticated_app) as test_client:
@@ -35,31 +44,51 @@ def test_satellite_catalog(client):
     assert accra["name"] == "Accra Coast, Ghana"
     assert len(accra["coordinates"]) == 2
     assert accra["has_local_sample"] is True
+    assert accra["inference_available"] is False
 
 
 def test_analyze_registered_hotspot_via_post(client):
     response = client.post("/api/satellite/analyze", data={"hotspot_id": "accra-coast"})
-    assert response.status_code == 503
-    assert "Checkpoint metadata is missing" in response.json()["error"]["message"]
+    assert response.status_code == 422
+    assert "not verified Sentinel-2 imagery" in response.json()["error"]["message"]
 
 
 def test_analyze_registered_hotspot_by_id_endpoint(client):
     response = client.get("/api/satellite/hotspots/accra-coast/analyze")
-    assert response.status_code == 503
-    assert "Checkpoint metadata is missing" in response.json()["error"]["message"]
+    assert response.status_code == 422
+    assert "not verified Sentinel-2 imagery" in response.json()["error"]["message"]
 
 
 def test_analyze_uploaded_geotiff(client):
     assert SAMPLE_TIF.is_file(), f"Sample GeoTIFF not found at {SAMPLE_TIF}"
-    with open(SAMPLE_TIF, "rb") as f:
-        file_bytes = f.read()
+    with SAMPLE_TIF.open("rb") as sample_file:
+        file_bytes = sample_file.read()
+    with rasterio.open(SAMPLE_TIF) as source:
+        expected_transform = source.transform
 
     response = client.post(
         "/api/satellite/analyze",
-        files={"file": ("accra-upload.tif", file_bytes, "image/tiff")},
+        files={"file": ("marida-test.tif", file_bytes, "image/tiff")},
     )
-    assert response.status_code == 503
-    assert "Checkpoint metadata is missing" in response.json()["error"]["message"]
+    assert response.status_code == 200
+    data = response.json()
+    assert data["id"] == "custom-upload"
+    assert data["total_pixels"] == 256 * 256
+    assert sum(item["pixel_count"] for item in data["class_statistics"]) == data["total_pixels"]
+    assert data["raster_metadata"]["count"] == 11
+    assert data["raster_metadata"]["crs"] == "EPSG:32616"
+    assert data["predicted_classes"]
+    assert len(data["preview_png_base64"]) > 100
+    assert len(data["overlay_png_base64"]) > 100
+
+    encoded_mask = base64.b64decode(data["segmentation_mask_geotiff_base64"])
+    with MemoryFile(encoded_mask) as memory_file:
+        with memory_file.open() as dataset:
+            mask = dataset.read(1)
+            assert (dataset.width, dataset.height) == (256, 256)
+            assert dataset.crs.to_string() == "EPSG:32616"
+            assert dataset.transform == expected_transform
+            assert set(np.unique(mask)).issubset(set(range(11)) | {255})
 
 
 def test_analyze_unknown_hotspot_returns_404(client):
@@ -101,31 +130,77 @@ def test_analyze_rejects_non_geotiff_extension(client):
     assert "must be a .tif or .tiff" in response.json()["error"]["message"]
 
 
-def test_checkpoint_is_architecture_compatible_but_lacks_verifiable_provenance():
+def test_official_checkpoint_is_provenance_verified_and_architecture_compatible():
     checkpoint = torch.load(MODEL_PATH, map_location="cpu", weights_only=True)
     model = UNet(input_bands=11, output_classes=11, hidden_channels=16)
     model.load_state_dict(checkpoint, strict=True)
 
+    detector = DebrisDetector(
+        model_path=MODEL_PATH,
+        class_names=CLASS_NAMES,
+        band_order=BAND_ORDER,
+    )
+    assert not detector.model.training
+
     with rasterio.open(SAMPLE_TIF) as dataset:
         image = torch.from_numpy(dataset.read().astype(np.float32))
-    model.eval()
-    with torch.inference_mode():
-        logits = model(image.unsqueeze(0))
-        predicted_mask = logits.argmax(dim=1)
+    predicted_mask = detector.predict(image)
 
-    assert tuple(logits.shape) == (1, 11, 256, 256)
-    assert tuple(predicted_mask.shape) == (1, 256, 256)
+    assert tuple(predicted_mask.shape) == (256, 256)
     assert int(predicted_mask.min()) >= 0
     assert int(predicted_mask.max()) < 11
-    with pytest.raises(ValueError, match="Checkpoint metadata is missing"):
+
+
+def test_inference_imputes_nonfinite_bands_with_training_mean():
+    detector = DebrisDetector(
+        model_path=MODEL_PATH,
+        class_names=CLASS_NAMES,
+        band_order=BAND_ORDER,
+    )
+    with rasterio.open(SAMPLE_TIF) as dataset:
+        image = torch.from_numpy(dataset.read().astype(np.float32))
+
+    image_with_nodata = image.clone()
+    image_with_nodata[0, 10, 10] = float("nan")
+    image_imputed = image.clone()
+    image_imputed[0, 10, 10] = detector.preprocessing["mean"][0, 0, 0, 0]
+
+    assert torch.equal(detector.predict(image_with_nodata), detector.predict(image_imputed))
+
+
+def test_official_test_patch_matches_its_labeled_pixels():
+    detector = DebrisDetector(
+        model_path=MODEL_PATH,
+        class_names=CLASS_NAMES,
+        band_order=BAND_ORDER,
+    )
+    with rasterio.open(SAMPLE_TIF) as dataset:
+        image = torch.from_numpy(dataset.read().astype(np.float32))
+    with rasterio.open(FIXTURE_DIR / "S2_12-12-20_16PCC_0_cl.tif") as dataset:
+        labels = dataset.read(1).astype(np.int16)
+
+    for source_class in (12, 13, 14, 15):
+        labels[labels == source_class] = 7
+    labels -= 1
+    annotated = labels >= 0
+    prediction = detector.predict(image).numpy()
+
+    assert annotated.sum() == 13
+    assert np.array_equal(prediction[annotated], labels[annotated])
+
+
+def test_modified_checkpoint_fails_sha256_verification(tmp_path):
+    checkpoint_path = tmp_path / "model.pth"
+    metadata_path = tmp_path / "model.pth.metadata.json"
+    shutil.copyfile(MODEL_PATH, checkpoint_path)
+    shutil.copyfile(MODEL_PATH.with_name("model.pth.metadata.json"), metadata_path)
+    checkpoint_path.write_bytes(checkpoint_path.read_bytes() + b"tampered")
+
+    with pytest.raises(ValueError, match="SHA-256"):
         DebrisDetector(
-            model_path=MODEL_PATH,
-            class_names=[
-                "Marine Debris", "Dense Sargassum", "Sparse Sargassum",
-                "Natural Organic Material", "Ship", "Clouds", "Marine Water",
-                "Sediment-Laden Water", "Foam", "Turbid Water", "Shallow Water",
-            ],
-            band_order=["B1", "B2", "B3", "B4", "B5", "B6", "B7", "B8", "B8A", "B11", "B12"],
+            model_path=checkpoint_path,
+            class_names=CLASS_NAMES,
+            band_order=BAND_ORDER,
         )
 
 

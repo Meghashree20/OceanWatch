@@ -11,6 +11,7 @@ class HotspotCatalogItem(BaseModel):
     description: str
     sample_file: str
     has_local_sample: bool = True
+    inference_available: bool = False
 
 
 class SatelliteRasterMetadata(BaseModel):

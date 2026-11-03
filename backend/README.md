@@ -123,31 +123,43 @@ inputs return `UNAVAILABLE` rather than fabricated values.
 ### Satellite segmentation
 
 Satellite inference uses the 11-band, 11-class U-Net in `app/ml/satellite/unet.py`
-and runs on CPU by default. Checkpoints must be accompanied by
-`models/model.pth.metadata.json`. That manifest must be tied to the checkpoint by
-SHA-256 and document the exact architecture, Sentinel-2 band order, output class
-order, per-band preprocessing parameters, MARIDA training provenance, and
-validation evidence. Do not create the manifest from assumptions: the current
-`models/model.pth` has no companion provenance, so the API correctly returns
-HTTP 503 rather than presenting unverified model output as marine-plastic
-detections.
+and runs on CPU by default. `models/model.pth` is the official MARIDA upstream
+pretrained checkpoint (epoch 44), downloaded from the archive linked by the
+[upstream project](https://github.com/marine-debris/marine-debris.github.io/blob/8de83a3394edfbe867d9fa825439666369ec6282/README.md).
+Its SHA-256 is recorded in `models/model.pth.metadata.json`; the checkpoint
+strictly loads into this U-Net implementation. The metadata records the official
+11-band Sentinel-2 order, 11-class output mapping, and preprocessing taken from
+the upstream data loader. MARIDA training class IDs 12–15 are aggregated to
+Marine Water as in the upstream default.
 
-The manifest format is version 1 and includes `format_version`,
-`checkpoint_sha256`, `task`, `architecture` (`name`, `input_bands`,
-`output_classes`, and `hidden_channels`), `band_order`, `class_names`, `training`
-(`dataset`, `provenance`, and `validation_evidence`), and `preprocessing` arrays
-(`scale`, `offset`, `mean`, and `std`, each with 11 entries). Preprocessing is
-applied as `(raster * scale + offset - mean) / std` band by band. The values and
-evidence must come from the original training artifacts; the checksum only binds
-the manifest to the checkpoint and does not prove that its training claims are
-true. Review the provenance and validation evidence before enabling a model.
+Preprocessing is `(reflectance - band_mean) / band_std`; NaN/NoData values are
+imputed with the upstream per-band means before standardization. The accepted
+band order is B1, B2, B3, B4, B5, B6, B7, B8, B8A, B11, B12. Uploads must be
+authentic Sentinel-2 L2A reflectance in this order; the API cannot independently
+prove the source or band identity from a TIFF containing no band descriptions.
 
-The bundled GeoTIFFs can be opened as 11-band rasters, but their imagery and
-georeferencing are not verified. Use an authentic Sentinel-2 L2A GeoTIFF with
-bands ordered B1, B2, B3, B4, B5, B6, B7, B8, B8A, B11, B12 and the
-preprocessing recorded by the model's training artifact. When a verified model
-is available, results include a class-index GeoTIFF with the input CRS and
-affine transform; invalid input pixels are encoded as NoData value 255.
+The original [MARIDA dataset](https://doi.org/10.5281/zenodo.5151941) is publicly
+available under CC BY 4.0 (1.16 GB archive; 4.38 GB uncompressed). The repository
+includes one unmodified held-out MARIDA test patch and its class mask under
+`tests/fixtures/marida/`, attributed to Kikaki et al. (2022), DOI
+10.5281/zenodo.5151941, CC BY 4.0. This supports a real inference/API smoke test.
+The example has only 13 labeled pixels, so it is not evidence of broad model
+accuracy. Upstream evaluation code provides a full test-split evaluation
+procedure, but no aggregate evaluation log is included with the released weights.
+
+The older registered demo rasters remain available in the catalog but are
+explicitly marked as unverified and cannot be analyzed. Upload a verified
+11-band Sentinel-2 L2A GeoTIFF to run inference. Results include a class-index
+GeoTIFF preserving the input CRS and affine transform; invalid input pixels are
+encoded as NoData value 255.
+
+If replacing the checkpoint, update its metadata manifest only from the actual
+training artifacts. Version 1 requires `format_version`, `checkpoint_sha256`,
+`task`, `architecture` (`name`, `input_bands`, `output_classes`, and
+`hidden_channels`), `band_order`, `class_names`, `training` (`dataset`,
+`provenance`, and `validation_evidence`), and `preprocessing` arrays (`scale`,
+`offset`, `mean`, and `std`, each with 11 entries). The checksum detects mismatch
+between metadata and weights; it does not independently prove a model's claims.
 
 ## API endpoints
 

@@ -76,7 +76,7 @@ class SatelliteService:
 
     _detector: Optional[DebrisDetector] = None
 
-    # Bundled demonstration rasters. Their imagery and georeferencing are unverified.
+    # Bundled demonstration rasters are not verified MARIDA/Sentinel-2 inputs.
     CATALOG: Dict[str, Dict[str, Any]] = {
         "accra-coast": {
             "id": "accra-coast",
@@ -84,6 +84,7 @@ class SatelliteService:
             "coordinates": [5.55, -0.20],
             "description": "Bundled GeoTIFF sample; satellite imagery and georeferencing provenance are unverified.",
             "sample_file": "samples/accra-coast.tif",
+            "inference_available": False,
         },
         "gulf-of-honduras": {
             "id": "gulf-of-honduras",
@@ -91,6 +92,7 @@ class SatelliteService:
             "coordinates": [15.80, -87.90],
             "description": "Bundled GeoTIFF sample; satellite imagery and georeferencing provenance are unverified.",
             "sample_file": "samples/gulf-of-honduras.tif",
+            "inference_available": False,
         },
         "durban-harbor": {
             "id": "durban-harbor",
@@ -98,6 +100,7 @@ class SatelliteService:
             "coordinates": [-29.86, 31.02],
             "description": "Bundled GeoTIFF sample; satellite imagery and georeferencing provenance are unverified.",
             "sample_file": "samples/durban-harbor.tif",
+            "inference_available": False,
         },
         "coastal-demo-site": {
             "id": "coastal-demo-site",
@@ -105,6 +108,7 @@ class SatelliteService:
             "coordinates": [12.91, 74.85],
             "description": "Bundled GeoTIFF sample; satellite imagery and georeferencing provenance are unverified.",
             "sample_file": "samples/coastal-demo-site.tif",
+            "inference_available": False,
         },
     }
 
@@ -175,6 +179,7 @@ class SatelliteService:
                     description=item["description"],
                     sample_file=item["sample_file"],
                     has_local_sample=sample_path.is_file(),
+                    inference_available=item["inference_available"],
                 )
             )
         return items
@@ -244,7 +249,6 @@ class SatelliteService:
         valid_pixels &= np.isfinite(bands).all(axis=0)
         if not valid_pixels.any():
             raise InvalidSatelliteRasterError("Raster data contains no valid numeric pixels.")
-        bands[:, ~valid_pixels] = 0.0
         return bands, metadata, valid_pixels
 
     @classmethod
@@ -376,10 +380,15 @@ class SatelliteService:
         """Analyze a pre-registered coastal hotspot by ID."""
         if hotspot_id not in cls.CATALOG:
             raise KeyError(f"Unknown hotspot ID: '{hotspot_id}'. Available: {list(cls.CATALOG.keys())}")
+        hotspot = cls.CATALOG[hotspot_id]
+        if not hotspot["inference_available"]:
+            raise InvalidSatelliteRasterError(
+                f"Registered sample '{hotspot_id}' is not verified Sentinel-2 imagery. "
+                "Upload an authentic 11-band Sentinel-2 L2A GeoTIFF instead."
+            )
         if rasterio is None:
             raise SatelliteUnavailableError("Satellite analysis dependencies are unavailable; install rasterio to enable it.")
 
-        hotspot = cls.CATALOG[hotspot_id]
         sample_path = _BACKEND_ROOT / hotspot["sample_file"]
         if not sample_path.is_file():
             raise FileNotFoundError(f"Hotspot sample GeoTIFF not found: {sample_path}")

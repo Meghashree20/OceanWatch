@@ -148,8 +148,14 @@ export function SatellitePage() {
                           <p className="truncate text-xs font-semibold text-navy-900">{item.name}</p>
                           <p className="mt-0.5 truncate text-[11px] text-ocean-500">{item.description}</p>
                         </div>
-                        <Button variant="ghost" size="sm" disabled={!item.has_local_sample || loading} onClick={() => analyzeCatalogItem(item)}>
-                          Analyze
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          disabled={!item.has_local_sample || !item.inference_available || loading}
+                          title={item.inference_available ? 'Analyze verified sample' : 'Bundled sample imagery is not verified'}
+                          onClick={() => analyzeCatalogItem(item)}
+                        >
+                          {item.inference_available ? 'Analyze' : 'Unverified'}
                         </Button>
                       </div>
                     ))}

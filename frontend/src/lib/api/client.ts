@@ -106,6 +106,7 @@ export interface SatelliteCatalogItem {
   description: string;
   sample_file: string;
   has_local_sample: boolean;
+  inference_available: boolean;
 }
 
 export interface SatelliteAnalysis {
