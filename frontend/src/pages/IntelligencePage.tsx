@@ -1,5 +1,4 @@
 import {
-  Activity,
   ArrowRight,
   BarChart3,
   Calendar,
@@ -59,6 +58,7 @@ export function IntelligencePage() {
   const [filteredCount, setFilteredCount] = useState<number | null>(null);
   const [hotspots, setHotspots] = useState<Hotspot[]>([]);
   const [recommendations, setRecommendations] = useState<Recommendation[]>([]);
+  const [recommendationError, setRecommendationError] = useState<string | null>(null);
   const [totalUnfilteredObs, setTotalUnfilteredObs] = useState<number | null>(null);
 
   // Status States
@@ -89,6 +89,7 @@ export function IntelligencePage() {
   const fetchDashboardData = useCallback((currentFilters: DashboardFilters) => {
     setLoading(true);
     setError(null);
+    setRecommendationError(null);
 
     // Build backend parameters supported by existing FastAPI endpoints
     const obsParams: {
@@ -114,10 +115,17 @@ export function IntelligencePage() {
     if (currentFilters.ocean !== 'ALL') hotspotParams.ocean = currentFilters.ocean;
     if (currentFilters.region !== 'ALL') hotspotParams.region = currentFilters.region;
 
+    const recommendationsRequest = oceanWatchApi
+      .getPriorityResults(100, getSavedRecommendationContext())
+      .catch((requestError: Error) => {
+        setRecommendationError(requestError.message);
+        return { data: [], total: 0 };
+      });
+
     Promise.all([
       oceanWatchApi.getAllObservations(obsParams),
       oceanWatchApi.getHotspots(hotspotParams),
-      oceanWatchApi.getPriorityResults(100, getSavedRecommendationContext()).catch(() => ({ data: [], total: 0 })),
+      recommendationsRequest,
     ])
       .then(([obsResponse, hotspotResponse, recResponse]) => {
         setObservations(obsResponse.data);
@@ -182,9 +190,6 @@ export function IntelligencePage() {
         <div className="flex flex-wrap items-center gap-2">
           <Badge variant="cyan" icon={<Waves className="h-3.5 w-3.5" />}>
             Standard Unit: pieces/m³
-          </Badge>
-          <Badge variant="neutral" icon={<Activity className="h-3.5 w-3.5" />}>
-            FastAPI · MongoDB Live
           </Badge>
           {activeFilterCount > 0 && (
             <Badge variant="teal" icon={<Filter className="h-3.5 w-3.5" />}>
@@ -308,6 +313,7 @@ export function IntelligencePage() {
           />
           <PriorityActionQueue
             recommendations={recommendations}
+            error={recommendationError}
             resetTrigger={globalResetKey}
             filtersActive={activeFilterCount > 0}
           />
@@ -2096,10 +2102,12 @@ function RegionalPollutionChart({
 // -----------------------------------------------------------------------------
 function PriorityActionQueue({
   recommendations,
+  error,
   resetTrigger,
   filtersActive,
 }: {
   recommendations: Recommendation[];
+  error: string | null;
   resetTrigger: number;
   filtersActive: boolean;
 }) {
@@ -2136,6 +2144,11 @@ function PriorityActionQueue({
 
       <CardBody className="flex flex-1 flex-col justify-between p-5">
         <div className="space-y-3">
+          {error && (
+            <p role="alert" className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs leading-5 text-red-700">
+              Recommendation API unavailable: {error}
+            </p>
+          )}
           {topPriorities.map((item, idx) => {
             const rawClusterId = item.cluster?.cluster_id ?? item.hotspot?.cluster_id ?? idx + 1;
             const clusterId = typeof rawClusterId === 'number' || typeof rawClusterId === 'string'
@@ -2145,6 +2158,9 @@ function PriorityActionQueue({
             const score = typeof item.priority_score === 'number' ? item.priority_score.toFixed(1) : '—';
             const isCritical = item.priority_level === 'CRITICAL';
             const isSelected = selectedIdx === idx;
+            const missingFactors = item.missing_external_factors
+              .map((factor) => factor.split('_').join(' '))
+              .join(', ');
 
             return (
               <div
@@ -2184,10 +2200,16 @@ function PriorityActionQueue({
                   </div>
                 </div>
 
+                {item.priority_score === null && missingFactors && (
+                  <p className="mt-3 border-t border-ocean-100 pt-2 text-[11px] leading-5 text-ocean-600">
+                    Score unavailable: provide validated {missingFactors} inputs in the Full Decision Queue.
+                  </p>
+                )}
+
                 {isSelected && (
                   <div className="mt-3 border-t border-cyan-200/80 pt-2 text-[11px] text-ocean-700">
                     <p className="font-semibold text-navy-950">Action Guidance:</p>
-                    <p className="mt-0.5">{item.recommended_action || item.recommendation || 'Targeted barrier deployment recommended.'}</p>
+                    <p className="mt-0.5">{item.recommended_action || item.recommendation || item.calculation_explanation}</p>
                   </div>
                 )}
               </div>
@@ -2196,7 +2218,9 @@ function PriorityActionQueue({
 
           {!topPriorities.length && (
             <div className="rounded-xl border border-dashed border-ocean-200 bg-ocean-50/50 p-6 text-center text-xs text-ocean-500">
-              No priority recommendations in the selected regional scope.
+              {error
+                ? `Unable to load priority recommendations: ${error}`
+                : 'No priority recommendations in the selected regional scope.'}
             </div>
           )}
         </div>

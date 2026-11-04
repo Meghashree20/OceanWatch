@@ -6,21 +6,32 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<AuthUser | null>(null);
   const [status, setStatus] = useState<AuthStatus>('loading');
 
+  const restoreSession = useCallback(async () => {
+    try {
+      const currentUser = await oceanWatchApi.getCurrentUser();
+      setUser(currentUser);
+      setStatus('authenticated');
+    } catch {
+      setUser(null);
+      setStatus('unauthenticated');
+    }
+  }, []);
+
   useEffect(() => {
     let active = true;
-    oceanWatchApi.getCurrentUser()
+
+    void oceanWatchApi.getCurrentUser()
       .then((currentUser) => {
-        if (active) {
-          setUser(currentUser);
-          setStatus('authenticated');
-        }
+        if (!active) return;
+        setUser(currentUser);
+        setStatus('authenticated');
       })
       .catch(() => {
-        if (active) {
-          setUser(null);
-          setStatus('unauthenticated');
-        }
+        if (!active) return;
+        setUser(null);
+        setStatus('unauthenticated');
       });
+
     return () => {
       active = false;
     };
@@ -28,9 +39,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const login = useCallback(async (email: string, password: string) => {
     const session = await oceanWatchApi.login({ email, password });
-    setUser(session.user);
+    const currentUser = await oceanWatchApi.getCurrentUser();
+    setUser(currentUser);
     setStatus('authenticated');
-    return session.user;
+    return session.user ?? currentUser;
   }, []);
 
   const signup = useCallback(async (
@@ -39,16 +51,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     password: string,
     passwordConfirmation: string,
   ) => {
-    await oceanWatchApi.signup({
+    const createdUser = await oceanWatchApi.signup({
       full_name: fullName,
       email,
       password,
       password_confirmation: passwordConfirmation,
     });
-    const session = await oceanWatchApi.login({ email, password });
-    setUser(session.user);
-    setStatus('authenticated');
-    return session.user;
+    setUser(null);
+    setStatus('unauthenticated');
+    return createdUser;
   }, []);
 
   const logout = useCallback(async () => {
@@ -61,8 +72,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const value = useMemo(
-    () => ({ user, status, login, signup, logout }),
-    [user, status, login, signup, logout],
+    () => ({ user, status, login, signup, logout, refreshSession: restoreSession }),
+    [user, status, login, signup, logout, restoreSession],
   );
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }

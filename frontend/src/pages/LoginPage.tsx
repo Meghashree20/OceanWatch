@@ -16,6 +16,20 @@ export function LoginPage() {
     return <RedirectToDestination />;
   }
 
+  if (status === 'loading') {
+    return (
+      <AuthLayout
+        title="Welcome back"
+        description="Checking your OceanWatch session…"
+        footer={<>New to OceanWatch? <Link className="font-semibold text-cyan-700 hover:text-cyan-600" to="/signup">Create an account</Link></>}
+      >
+        <div className="rounded-xl border border-ocean-200 bg-ocean-50 px-4 py-3 text-sm text-ocean-700">
+          Restoring your secure session…
+        </div>
+      </AuthLayout>
+    );
+  }
+
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setError('');
@@ -28,7 +42,10 @@ export function LoginPage() {
       await login(email.trim(), password);
       navigate('/intelligence', { replace: true });
     } catch (requestError) {
-      setError(requestError instanceof ApiClientError ? requestError.message : 'Unable to sign in. Please try again.');
+      const message = requestError instanceof ApiClientError ? requestError.message : 'Unable to sign in. Please try again.';
+      setError(message.includes('401') || message.toLowerCase().includes('invalid') || message.toLowerCase().includes('password')
+        ? 'Invalid email or password.'
+        : message);
     } finally {
       setLoading(false);
     }

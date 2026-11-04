@@ -18,6 +18,20 @@ export function SignupPage() {
     return <Navigate to="/intelligence" replace />;
   }
 
+  if (status === 'loading') {
+    return (
+      <AuthLayout
+        title="Create your account"
+        description="Checking your OceanWatch session…"
+        footer={<>Already have an account? <Link className="font-semibold text-cyan-700 hover:text-cyan-600" to="/login">Sign in</Link></>}
+      >
+        <div className="rounded-xl border border-ocean-200 bg-ocean-50 px-4 py-3 text-sm text-ocean-700">
+          Restoring your secure session…
+        </div>
+      </AuthLayout>
+    );
+  }
+
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setError('');
@@ -36,9 +50,12 @@ export function SignupPage() {
     setLoading(true);
     try {
       await signup(fullName.trim(), email.trim(), password, confirmation);
-      navigate('/intelligence', { replace: true });
+      navigate('/login', { replace: true });
     } catch (requestError) {
-      setError(requestError instanceof ApiClientError ? requestError.message : 'Unable to create your account. Please try again.');
+      const message = requestError instanceof ApiClientError ? requestError.message : 'Unable to create your account. Please try again.';
+      setError(message.toLowerCase().includes('409') || message.toLowerCase().includes('already') || message.toLowerCase().includes('exists')
+        ? 'An account with this email already exists.'
+        : message);
     } finally {
       setLoading(false);
     }
