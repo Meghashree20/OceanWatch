@@ -93,8 +93,10 @@ export interface SatelliteRasterMetadata {
   width: number;
   height: number;
   count: number;
+  nodata: number | null;
   crs: string | null;
   bounds: number[] | null;
+  transform: number[] | null;
 }
 
 export interface SatelliteCatalogItem {
@@ -104,6 +106,7 @@ export interface SatelliteCatalogItem {
   description: string;
   sample_file: string;
   has_local_sample: boolean;
+  inference_available: boolean;
 }
 
 export interface SatelliteAnalysis {
@@ -126,6 +129,7 @@ export interface SatelliteAnalysis {
   }>;
   preview_png_base64: string;
   segmentation_mask_png_base64: string;
+  segmentation_mask_geotiff_base64: string;
   overlay_png_base64: string;
   raster_metadata: SatelliteRasterMetadata | null;
   status: string;
