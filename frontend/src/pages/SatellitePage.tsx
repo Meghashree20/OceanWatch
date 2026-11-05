@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { AlertCircle, CheckCircle2, Download, FileImage, Image as ImageIcon, LoaderCircle, Satellite, Upload, Waves } from 'lucide-react';
+import { AlertCircle, AlertTriangle, CheckCircle2, Download, FileImage, Image as ImageIcon, LoaderCircle, Satellite, Upload, Waves } from 'lucide-react';
 import { PageHeader } from '@/components/layout/PageShell';
 import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
@@ -73,6 +73,8 @@ export function SatellitePage() {
       .catch((requestError: Error) => setError(requestError.message))
       .finally(() => setLoading(false));
   };
+
+  const verificationError = error !== null && /verif|checkpoint|class order|training metadata/i.test(error);
 
   return (
     <div>
@@ -172,8 +174,8 @@ export function SatellitePage() {
                   <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-teal-100 text-teal-700"><Waves className="h-4 w-4" /></div>
                   <h2 className="text-base font-bold text-navy-950">Analysis results</h2>
                 </div>
-                <Badge variant={loading ? 'neutral' : analysis ? 'cyan' : error ? 'error' : 'neutral'}>
-                  {loading ? 'Analyzing' : analysis ? 'Complete' : error ? 'Unavailable' : 'Awaiting input'}
+                <Badge variant={loading ? 'neutral' : analysis ? (analysis.analysis_reliable ? 'success' : 'warning') : error ? 'error' : 'neutral'}>
+                  {loading ? 'Analyzing' : analysis ? (analysis.analysis_reliable ? 'Complete' : 'Needs verification') : error ? 'Unavailable' : 'Awaiting input'}
                 </Badge>
               </div>
             </CardHeader>
@@ -185,10 +187,16 @@ export function SatellitePage() {
                   <p className="mt-1 text-xs text-ocean-500">The backend is validating and analyzing the raster.</p>
                 </div>
               ) : error ? (
-                <div className="flex min-h-[22rem] flex-col items-center justify-center text-center">
-                  <AlertCircle className="h-8 w-8 text-red-500" />
-                  <p className="mt-4 text-sm font-semibold text-red-800">Satellite analysis failed</p>
-                  <p className="mt-1 max-w-md text-xs leading-5 text-red-700">{error}</p>
+                <div className="flex min-h-[22rem] flex-col items-center justify-center text-center" role="alert">
+                  {verificationError ? (
+                    <AlertTriangle className="h-8 w-8 text-amber-600" />
+                  ) : (
+                    <AlertCircle className="h-8 w-8 text-red-500" />
+                  )}
+                  <p className={`mt-4 text-sm font-semibold ${verificationError ? 'text-amber-900' : 'text-red-800'}`}>
+                    {verificationError ? 'Model configuration could not be verified' : 'Satellite analysis failed'}
+                  </p>
+                  <p className={`mt-1 max-w-md text-xs leading-5 ${verificationError ? 'text-amber-800' : 'text-red-700'}`}>{error}</p>
                 </div>
               ) : analysis ? (
                 <AnalysisResult analysis={analysis} />
@@ -210,16 +218,33 @@ export function SatellitePage() {
 function AnalysisResult({ analysis }: { analysis: SatelliteAnalysis }) {
   const metadata = analysis.raster_metadata;
   const outputName = analysis.image_name.replace(/\.(tif|tiff)$/i, '') || 'satellite-segmentation';
+  const classCount = (classId: number) => analysis.class_statistics.find((item) => item.class_id === classId)?.pixel_count ?? 0;
+  const otherClassCount = analysis.class_statistics
+    .filter((item) => item.class_id < 11 && item.class_id !== 0 && item.class_id !== 6)
+    .reduce((total, item) => total + item.pixel_count, 0);
   return (
     <div className="space-y-5">
-      <div className="grid gap-3 sm:grid-cols-3">
-        <Metric label="Debris pixels" value={analysis.debris_pixel_count.toLocaleString()} />
-        <Metric label="Total pixels" value={analysis.total_pixels.toLocaleString()} />
-        <Metric label="Debris coverage" value={`${analysis.debris_coverage_percentage.toFixed(4)}%`} />
+      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+        <Metric label="Marine debris pixels" value={analysis.debris_pixel_count.toLocaleString()} />
+        <Metric label="Debris coverage (confident pixels)" value={analysis.debris_coverage_percentage === null ? 'N/A' : `${analysis.debris_coverage_percentage.toFixed(2)}%`} />
+        <Metric label="Marine water pixels" value={classCount(6).toLocaleString()} />
+        <Metric label="Other MARIDA classes" value={otherClassCount.toLocaleString()} />
+        <Metric label="Uncertain pixels" value={`${analysis.uncertain_pixel_count.toLocaleString()} · ${analysis.uncertain_pixel_percentage.toFixed(2)}%`} />
+        <Metric label="Average model confidence" value={`${(analysis.average_confidence * 100).toFixed(2)}%`} />
+        <Metric label="Excluded from debris coverage" value={`${analysis.excluded_pixel_percentage.toFixed(2)}%`} />
+        <Metric label="Confident pixels / threshold" value={`${analysis.confident_pixel_count.toLocaleString()} · ${(analysis.confidence_threshold * 100).toFixed(0)}%`} />
       </div>
-      <div className="flex items-start gap-2 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2.5 text-xs text-emerald-800">
-        <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0" />
-        <span><strong>{analysis.name}</strong> · {analysis.description}</span>
+      <div className={`flex items-start gap-2 rounded-lg border px-3 py-2.5 text-xs ${analysis.analysis_reliable ? 'border-emerald-200 bg-emerald-50 text-emerald-800' : 'border-amber-300 bg-amber-50 text-amber-900'}`}>
+        {analysis.analysis_reliable ? <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0" /> : <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />}
+        <div>
+          <strong>{analysis.analysis_reliable ? 'Input checks passed' : 'Prediction requires verification'}</strong>
+          <p className="mt-0.5"><strong>{analysis.name}</strong> · {analysis.description}</p>
+          {analysis.warnings.length > 0 && (
+            <ul className="mt-1 list-disc space-y-0.5 pl-4">
+              {analysis.warnings.map((warning) => <li key={warning}>{warning}</li>)}
+            </ul>
+          )}
+        </div>
       </div>
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
@@ -245,8 +270,9 @@ function AnalysisResult({ analysis }: { analysis: SatelliteAnalysis }) {
       <section className="border-t border-ocean-100 pt-4" aria-labelledby="class-statistics-heading">
         <div className="flex items-baseline justify-between gap-3">
           <h3 id="class-statistics-heading" className="text-sm font-bold text-navy-950">MARIDA class distribution</h3>
-          <span className="text-[11px] text-ocean-500">{analysis.predicted_classes.length} classes present · {analysis.total_pixels.toLocaleString()} pixels</span>
+          <span className="text-[11px] text-ocean-500">{analysis.predicted_classes.length} predicted classes · {analysis.total_pixels.toLocaleString()} pixels</span>
         </div>
+        <p className="mt-1 text-[11px] text-ocean-500">Class percentages use all raster pixels. Debris coverage excludes uncertain and invalid pixels.</p>
         <div className="mt-4 space-y-3">
           {analysis.class_statistics.map((item) => (
             <div key={item.class_id}>

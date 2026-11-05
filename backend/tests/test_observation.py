@@ -46,9 +46,18 @@ def test_satellite_result_normalizes_scientific_metrics_without_preview_data():
         description="Registered site",
         debris_pixel_count=1205,
         total_pixels=65536,
+        valid_pixel_count=65536,
+        confident_pixel_count=65536,
+        uncertain_pixel_count=0,
+        uncertain_pixel_percentage=0.0,
+        excluded_pixel_count=0,
+        excluded_pixel_percentage=0.0,
+        confidence_threshold=0.5,
+        average_confidence=0.9,
         debris_coverage_percentage=1.8387,
         preview_png_base64="preview-not-to-be-persisted",
         overlay_png_base64="overlay-not-to-be-persisted",
+        analysis_reliable=True,
         raster_metadata=SatelliteRasterMetadata(
             width=256,
             height=256,
@@ -86,15 +95,50 @@ def test_satellite_placeholder_coordinates_are_not_normalized_as_real_location()
         description="Uploaded patch",
         debris_pixel_count=0,
         total_pixels=256,
+        valid_pixel_count=256,
+        confident_pixel_count=256,
+        uncertain_pixel_count=0,
+        uncertain_pixel_percentage=0.0,
+        excluded_pixel_count=0,
+        excluded_pixel_percentage=0.0,
+        confidence_threshold=0.5,
+        average_confidence=0.9,
         debris_coverage_percentage=0.0,
         preview_png_base64="",
         overlay_png_base64="",
+        analysis_reliable=True,
     )
 
     normalized = ObservationService.from_satellite(result)
 
     assert normalized.latitude is None
     assert normalized.longitude is None
+
+
+def test_satellite_observation_rejects_coverage_when_no_pixels_are_confident():
+    result = SatelliteAnalysisResponse(
+        id="custom-upload",
+        name="Uncertain upload",
+        coordinates=[0.0, 0.0],
+        description="Uploaded patch",
+        debris_pixel_count=0,
+        total_pixels=2,
+        valid_pixel_count=2,
+        confident_pixel_count=0,
+        uncertain_pixel_count=2,
+        uncertain_pixel_percentage=100.0,
+        excluded_pixel_count=2,
+        excluded_pixel_percentage=100.0,
+        confidence_threshold=0.5,
+        average_confidence=0.2,
+        debris_coverage_percentage=None,
+        preview_png_base64="",
+        overlay_png_base64="",
+        analysis_reliable=False,
+    )
+
+    with pytest.raises(ValueError, match="no sufficiently confident pixels"):
+        ObservationService.from_satellite(result)
 
 
 def test_normalized_observation_requires_coordinate_pair():

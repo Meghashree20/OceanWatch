@@ -12,10 +12,12 @@ from rasterio.io import MemoryFile
 from rasterio.transform import from_origin
 from starlette.testclient import TestClient
 
+from app.core.config import Settings
 from app.ml.satellite.detector import DebrisDetector
 from app.ml.satellite.unet import UNet
 from app.schemas.satellite import SatelliteRasterMetadata
 from app.services.satellite_service import SatelliteService
+from app.services.satellite_service import INVALID_CLASS_ID, UNCERTAIN_CLASS_ID
 
 FIXTURE_DIR = Path(__file__).resolve().parent / "fixtures" / "marida"
 SAMPLE_TIF = FIXTURE_DIR / "S2_12-12-20_16PCC_0.tif"
@@ -75,6 +77,12 @@ def test_analyze_uploaded_geotiff(client):
     assert data["id"] == "custom-upload"
     assert data["total_pixels"] == 256 * 256
     assert sum(item["pixel_count"] for item in data["class_statistics"]) == data["total_pixels"]
+    assert data["confident_pixel_count"] + data["uncertain_pixel_count"] == data["valid_pixel_count"]
+    assert data["excluded_pixel_count"] == data["uncertain_pixel_count"] + data["total_pixels"] - data["valid_pixel_count"]
+    assert data["confidence_threshold"] == 0.5
+    assert 0.0 <= data["average_confidence"] <= 1.0
+    assert data["analysis_reliable"] is False
+    assert any("does not identify all bands" in warning for warning in data["warnings"])
     assert data["raster_metadata"]["count"] == 11
     assert data["raster_metadata"]["crs"] == "EPSG:32616"
     assert data["predicted_classes"]
@@ -88,7 +96,7 @@ def test_analyze_uploaded_geotiff(client):
             assert (dataset.width, dataset.height) == (256, 256)
             assert dataset.crs.to_string() == "EPSG:32616"
             assert dataset.transform == expected_transform
-            assert set(np.unique(mask)).issubset(set(range(11)) | {255})
+            assert set(np.unique(mask)).issubset(set(range(11)) | {UNCERTAIN_CLASS_ID, INVALID_CLASS_ID})
 
 
 def test_analyze_unknown_hotspot_returns_404(client):
@@ -183,10 +191,71 @@ def test_official_test_patch_matches_its_labeled_pixels():
         labels[labels == source_class] = 7
     labels -= 1
     annotated = labels >= 0
-    prediction = detector.predict(image).numpy()
+    prediction, confidence = detector.predict_with_confidence(image)
+    prediction = prediction.numpy()
+    confidence = confidence.numpy()
+    classified = SatelliteService._classify_with_confidence(
+        prediction,
+        confidence,
+        annotated,
+        threshold=0.5,
+    )
 
     assert annotated.sum() == 13
     assert np.array_equal(prediction[annotated], labels[annotated])
+    assert np.all(confidence[annotated] >= 0.5)
+    assert np.array_equal(classified.mask[annotated], labels[annotated])
+    assert np.count_nonzero((labels == 6) & annotated) == 11
+    assert np.count_nonzero((labels == 0) & annotated) == 2
+    assert classified.debris_pixel_count == 2
+    assert classified.debris_coverage_percentage == pytest.approx(2 / 13 * 100, abs=0.0001)
+    clean_ocean_pixels = annotated & (labels == 6)
+    debris_pixels = annotated & (labels == 0)
+    assert clean_ocean_pixels.sum() == 11
+    assert debris_pixels.sum() == 2
+    assert np.all(classified.mask[clean_ocean_pixels] == 6)
+    assert np.all(classified.mask[debris_pixels] == 0)
+
+
+def test_satellite_confidence_threshold_is_configurable_and_bounded():
+    assert Settings(SATELLITE_CONFIDENCE_THRESHOLD=0.75).SATELLITE_CONFIDENCE_THRESHOLD == 0.75
+    with pytest.raises(ValueError):
+        Settings(SATELLITE_CONFIDENCE_THRESHOLD=1.1)
+
+
+def test_confidence_threshold_excludes_uncertain_and_invalid_pixels_from_coverage():
+    predictions = np.array([[0, 6, 9, 0, 6, 6]], dtype=np.uint8)
+    confidence = np.array([[0.9, 0.8, 0.49, 0.5, 0.1, 0.7]], dtype=np.float32)
+    valid_pixels = np.array([[True, True, True, True, True, False]])
+
+    classified = SatelliteService._classify_with_confidence(
+        predictions,
+        confidence,
+        valid_pixels,
+        threshold=0.5,
+    )
+
+    assert classified.mask.tolist() == [[0, 6, UNCERTAIN_CLASS_ID, 0, UNCERTAIN_CLASS_ID, INVALID_CLASS_ID]]
+    assert int(classified.confident_pixels.sum()) == 3
+    assert int(classified.uncertain_pixels.sum()) == 2
+    assert classified.debris_pixel_count == 2
+    assert classified.debris_coverage_percentage == pytest.approx(200 / 3)
+    assert classified.average_confidence == pytest.approx((0.9 + 0.8 + 0.49 + 0.5 + 0.1) / 5)
+    assert classified.excluded_pixel_count == 3
+    assert classified.excluded_pixel_percentage == 50.0
+
+
+def test_debris_coverage_is_unavailable_without_confident_pixels():
+    classified = SatelliteService._classify_with_confidence(
+        np.array([[0, 6]], dtype=np.uint8),
+        np.array([[0.1, 0.2]], dtype=np.float32),
+        np.array([[True, True]]),
+        threshold=0.5,
+    )
+
+    assert classified.debris_coverage_percentage is None
+    assert classified.debris_pixel_count == 0
+    assert int(classified.uncertain_pixels.sum()) == 2
 
 
 def test_modified_checkpoint_fails_sha256_verification(tmp_path):
@@ -220,14 +289,19 @@ def test_raster_read_preserves_transform_and_masks_nodata():
             transform=transform,
         ) as dataset:
             dataset.write(values)
+            dataset.scales = (0.5,) * 11
+            dataset.offsets = (0.1,) * 11
         with memory_file.open() as dataset:
             bands, metadata, valid_pixels = SatelliteService._validate_and_read_dataset(dataset)
 
     assert bands.shape == (11, 3, 4)
+    assert bands[0, 1, 1] == pytest.approx(0.6)
     assert not valid_pixels[0, 0]
     assert valid_pixels.sum() == 11
     assert metadata.crs == "EPSG:4326"
     assert metadata.transform == list(tuple(transform)[:6])
+    assert metadata.band_scales == [0.5] * 11
+    assert metadata.band_offsets == [0.1] * 11
 
 
 def test_geotiff_mask_encoding_preserves_georeferencing_and_nodata():

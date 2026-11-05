@@ -7,7 +7,7 @@ from io import BytesIO
 import logging
 import pickle
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, NamedTuple, Optional
 
 import numpy as np
 from PIL import Image
@@ -61,6 +61,19 @@ MARIDA_CLASSES = (
     ("Shallow Water", "#22c55e"),
 )
 SENTINEL2_BAND_ORDER = ("B1", "B2", "B3", "B4", "B5", "B6", "B7", "B8", "B8A", "B11", "B12")
+UNCERTAIN_CLASS_ID = 254
+INVALID_CLASS_ID = 255
+
+
+class _ConfidenceClassification(NamedTuple):
+    mask: np.ndarray
+    confident_pixels: np.ndarray
+    uncertain_pixels: np.ndarray
+    average_confidence: float
+    debris_pixel_count: int
+    debris_coverage_percentage: Optional[float]
+    excluded_pixel_count: int
+    excluded_pixel_percentage: float
 
 
 class SatelliteUnavailableError(RuntimeError):
@@ -243,13 +256,116 @@ class SatelliteService:
             crs=str(dataset.crs) if dataset.crs else None,
             bounds=bounds_list,
             transform=[float(value) for value in tuple(dataset.transform)[:6]],
+            band_descriptions=list(dataset.descriptions),
+            band_scales=[float(value) for value in dataset.scales],
+            band_offsets=[float(value) for value in dataset.offsets],
+            band_dtypes=list(dataset.dtypes),
+            band_units=list(dataset.units),
         )
         valid_pixels = ~np.ma.getmaskarray(masked_bands).any(axis=0)
         bands = np.asarray(masked_bands.filled(np.nan), dtype=np.float32)
+        scales = np.asarray(dataset.scales, dtype=np.float32)[:, None, None]
+        offsets = np.asarray(dataset.offsets, dtype=np.float32)[:, None, None]
+        if not np.isfinite(scales).all() or not np.isfinite(offsets).all():
+            raise InvalidSatelliteRasterError("Raster band scales and offsets must be finite.")
+        bands = bands * scales + offsets
         valid_pixels &= np.isfinite(bands).all(axis=0)
         if not valid_pixels.any():
             raise InvalidSatelliteRasterError("Raster data contains no valid numeric pixels.")
         return bands, metadata, valid_pixels
+
+    @staticmethod
+    def _classify_with_confidence(
+        predicted_classes: np.ndarray,
+        confidence: np.ndarray,
+        valid_pixels: np.ndarray,
+        threshold: float,
+    ) -> _ConfidenceClassification:
+        """Mask low-confidence and invalid pixels and summarize debris coverage."""
+        if predicted_classes.shape != valid_pixels.shape or confidence.shape != valid_pixels.shape:
+            raise ValueError("Predictions, confidence, and valid-pixel masks must have matching shapes.")
+        if not np.isfinite(threshold) or not 0.0 <= threshold <= 1.0:
+            raise ValueError("Confidence threshold must be between 0 and 1.")
+        if not valid_pixels.any():
+            raise ValueError("Cannot classify a raster without valid pixels.")
+        if not np.isfinite(confidence[valid_pixels]).all():
+            raise ValueError("Model returned non-finite confidence for valid raster pixels.")
+
+        confident_pixels = valid_pixels & (confidence >= threshold)
+        uncertain_pixels = valid_pixels & ~confident_pixels
+        mask = np.full(valid_pixels.shape, INVALID_CLASS_ID, dtype=np.uint8)
+        mask[uncertain_pixels] = UNCERTAIN_CLASS_ID
+        mask[confident_pixels] = predicted_classes[confident_pixels].astype(np.uint8)
+
+        total_pixels = int(valid_pixels.size)
+        valid_pixel_count = int(valid_pixels.sum())
+        confident_pixel_count = int(confident_pixels.sum())
+        debris_pixel_count = int(((mask == 0) & confident_pixels).sum())
+        excluded_pixel_count = total_pixels - confident_pixel_count
+        return _ConfidenceClassification(
+            mask=mask,
+            confident_pixels=confident_pixels,
+            uncertain_pixels=uncertain_pixels,
+            average_confidence=float(confidence[valid_pixels].mean()),
+            debris_pixel_count=debris_pixel_count,
+            debris_coverage_percentage=(
+                round(debris_pixel_count / confident_pixel_count * 100.0, 4)
+                if confident_pixel_count
+                else None
+            ),
+            excluded_pixel_count=excluded_pixel_count,
+            excluded_pixel_percentage=round(excluded_pixel_count / total_pixels * 100.0, 4),
+        )
+
+    @staticmethod
+    def _input_warnings(metadata: SatelliteRasterMetadata) -> List[str]:
+        """Report input properties that prevent verification of model compatibility."""
+        warnings: List[str] = []
+        aliases = {
+            "B1": {"B1", "B01", "BAND1", "BAND01"},
+            "B2": {"B2", "B02", "BAND2", "BAND02"},
+            "B3": {"B3", "B03", "BAND3", "BAND03"},
+            "B4": {"B4", "B04", "BAND4", "BAND04"},
+            "B5": {"B5", "B05", "BAND5", "BAND05"},
+            "B6": {"B6", "B06", "BAND6", "BAND06"},
+            "B7": {"B7", "B07", "BAND7", "BAND07"},
+            "B8": {"B8", "B08", "BAND8", "BAND08"},
+            "B8A": {"B8A", "BAND8A"},
+            "B11": {"B11", "BAND11"},
+            "B12": {"B12", "BAND12"},
+        }
+        descriptions = metadata.band_descriptions or []
+        normalized_descriptions = [
+            (description or "").strip().upper().replace(" ", "")
+            for description in descriptions
+        ]
+        identified_bands = tuple(
+            next((band for band in SENTINEL2_BAND_ORDER if value in aliases[band]), "")
+            for value in normalized_descriptions
+        )
+        if identified_bands != SENTINEL2_BAND_ORDER:
+            warnings.append(
+                "The TIFF does not identify all bands in the expected order "
+                "(B1, B2, B3, B4, B5, B6, B7, B8, B8A, B11, B12). "
+                "The analysis assumes this order; verify it against the source before relying on predictions."
+            )
+        units = metadata.band_units or []
+        normalized_units = {(unit or "").strip().lower() for unit in units}
+        if len(units) != len(SENTINEL2_BAND_ORDER) or not normalized_units or any(
+            unit not in {"reflectance", "unitless", "dimensionless", "1"}
+            for unit in normalized_units
+        ):
+            warnings.append(
+                "The TIFF does not declare reflectance units for every band. The model assumes "
+                "Sentinel-2 L2A surface reflectance; confirm the source calibration and scale/offset metadata."
+            )
+        data_types = metadata.band_dtypes or []
+        if any(data_type not in {"float32", "float64"} for data_type in data_types):
+            warnings.append(
+                "The TIFF is not stored entirely as floating-point reflectance. Raster scales and offsets "
+                "are applied, but confirm the resulting values match MARIDA training reflectance."
+            )
+        return warnings
 
     @classmethod
     def _execute_analysis(
@@ -272,31 +388,40 @@ class SatelliteService:
             axis=-1,
         )
 
-        # Run U-Net CPU inference
+        # Run U-Net inference and retain its per-pixel softmax confidence.
         image_tensor = torch.from_numpy(bands)
         try:
-            mask = detector.predict(image_tensor).cpu().numpy()
+            predicted_classes, confidence = detector.predict_with_confidence(image_tensor)
+            predicted_classes = predicted_classes.cpu().numpy()
+            confidence = confidence.cpu().numpy()
         except ValueError as exc:
             raise RuntimeError("The U-Net rejected the validated raster tensor.") from exc
-        if mask.shape != valid_pixels.shape:
+        if predicted_classes.shape != valid_pixels.shape:
             raise RuntimeError(
-                f"U-Net returned a mask with shape {mask.shape}; expected {valid_pixels.shape}."
+                f"U-Net returned a mask with shape {predicted_classes.shape}; expected {valid_pixels.shape}."
             )
-        if np.any(mask < 0) or np.any(mask >= len(MARIDA_CLASSES)):
+        if np.any(predicted_classes < 0) or np.any(predicted_classes >= len(MARIDA_CLASSES)):
             raise RuntimeError("U-Net returned class IDs outside the configured MARIDA taxonomy.")
 
-        # Class 0 = Marine Debris in MARIDA taxonomy
-        debris_mask = (mask == 0) & valid_pixels
-        total_pixels = int(valid_pixels.sum())
-        debris_pixels = int(debris_mask.sum())
-        coverage_pct = round((debris_pixels / total_pixels) * 100.0, 4) if total_pixels > 0 else 0.0
+        classification = cls._classify_with_confidence(
+            predicted_classes,
+            confidence,
+            valid_pixels,
+            settings.SATELLITE_CONFIDENCE_THRESHOLD,
+        )
+        mask = classification.mask
+        total_pixels = int(valid_pixels.size)
+        valid_pixel_count = int(valid_pixels.sum())
+        confident_pixel_count = int(classification.confident_pixels.sum())
+        uncertain_pixel_count = int(classification.uncertain_pixels.sum())
 
-        # Fixed MARIDA palette: the mask remains a class-index raster while the
-        # overlay blends every predicted class over the true-color preview.
-        palette = np.asarray([
+        palette = np.zeros((INVALID_CLASS_ID + 1, 3), dtype=np.uint8)
+        class_colors = np.asarray([
             [int(color[index:index + 2], 16) for index in (1, 3, 5)]
             for _, color in MARIDA_CLASSES
         ], dtype=np.uint8)
+        palette[:len(MARIDA_CLASSES)] = class_colors
+        palette[UNCERTAIN_CLASS_ID] = (148, 163, 184)
         class_rgb = palette[mask]
         class_rgb[~valid_pixels] = 0
         preview_rgb[~valid_pixels] = 0
@@ -307,8 +432,13 @@ class SatelliteService:
         ).astype(np.uint8)
         mask_rgb = class_rgb.astype(np.uint8)
         class_statistics = []
-        for class_id, (class_name, color) in enumerate(MARIDA_CLASSES):
-            pixel_count = int(((mask == class_id) & valid_pixels).sum())
+        class_definitions = [
+            *[(class_id, name, color) for class_id, (name, color) in enumerate(MARIDA_CLASSES)],
+            (UNCERTAIN_CLASS_ID, "Uncertain", "#94a3b8"),
+            (INVALID_CLASS_ID, "Invalid / NoData", "#000000"),
+        ]
+        for class_id, class_name, color in class_definitions:
+            pixel_count = int((mask == class_id).sum())
             class_statistics.append({
                 "class_id": class_id,
                 "class_name": class_name,
@@ -317,6 +447,11 @@ class SatelliteService:
                 "percentage": round((pixel_count / total_pixels) * 100.0, 4) if total_pixels else 0.0,
             })
 
+        warnings = cls._input_warnings(meta)
+        if confident_pixel_count == 0:
+            warnings.append(
+                "No valid pixels meet the configured confidence threshold; debris coverage is unavailable."
+            )
         return SatelliteAnalysisResponse(
             id=site_info["id"],
             name=site_info["name"],
@@ -324,17 +459,30 @@ class SatelliteService:
             coordinates=site_info["coordinates"],
             description=site_info.get("description", "Sentinel-2 GeoTIFF Analysis"),
             sample_file=site_info.get("sample_file"),
-            debris_pixel_count=debris_pixels,
+            debris_pixel_count=classification.debris_pixel_count,
             total_pixels=total_pixels,
-            debris_coverage_percentage=coverage_pct,
-            predicted_classes=[item["class_id"] for item in class_statistics if item["pixel_count"] > 0],
+            valid_pixel_count=valid_pixel_count,
+            confident_pixel_count=confident_pixel_count,
+            uncertain_pixel_count=uncertain_pixel_count,
+            uncertain_pixel_percentage=round(uncertain_pixel_count / total_pixels * 100.0, 4),
+            excluded_pixel_count=classification.excluded_pixel_count,
+            excluded_pixel_percentage=classification.excluded_pixel_percentage,
+            confidence_threshold=settings.SATELLITE_CONFIDENCE_THRESHOLD,
+            average_confidence=round(classification.average_confidence, 4),
+            debris_coverage_percentage=classification.debris_coverage_percentage,
+            predicted_classes=[
+                item["class_id"] for item in class_statistics
+                if item["class_id"] < len(MARIDA_CLASSES) and item["pixel_count"] > 0
+            ],
             class_statistics=class_statistics,
             preview_png_base64=cls._encode_png(preview_rgb, "RGB"),
             segmentation_mask_png_base64=cls._encode_png(mask_rgb, "RGB"),
             overlay_png_base64=cls._encode_png(overlay_rgb, "RGB"),
             segmentation_mask_geotiff_base64=cls._encode_geotiff_mask(mask, valid_pixels, meta),
             raster_metadata=meta,
-            status="success",
+            analysis_reliable=not warnings,
+            warnings=warnings,
+            status="warning" if warnings else "success",
         )
 
     @staticmethod
@@ -363,15 +511,16 @@ class SatelliteService:
         }
         if metadata.crs is not None:
             profile["crs"] = metadata.crs
-        output_mask = np.where(valid_pixels, mask, 255).astype(np.uint8)
+        output_mask = np.where(valid_pixels, mask, INVALID_CLASS_ID).astype(np.uint8)
         with MemoryFile() as memory_file:
             with memory_file.open(**profile) as dataset:
                 dataset.write(output_mask, 1)
-                dataset.set_band_description(1, "MARIDA class ID (255 = NoData)")
+                dataset.set_band_description(1, "MARIDA class ID (254 = Uncertain, 255 = NoData)")
                 dataset.update_tags(**{
                     f"class_{class_id}": class_name
                     for class_id, (class_name, _) in enumerate(MARIDA_CLASSES)
                 })
+                dataset.update_tags(class_254="Uncertain", class_255="NoData")
             encoded = memory_file.read()
         return base64.b64encode(encoded).decode("ascii")
 

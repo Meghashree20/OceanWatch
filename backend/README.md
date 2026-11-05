@@ -45,6 +45,7 @@ Copy `.env.example` to `.env` and change values for the deployment environment:
 | `PROJECT_NAME` | `OceanWatch API` | API title |
 | `API_V1_STR` | `/api/v1` | OpenAPI JSON path prefix |
 | `BACKEND_CORS_ORIGINS` | localhost origins | Explicit JSON list of allowed browser origins |
+| `SATELLITE_CONFIDENCE_THRESHOLD` | `0.5` | Per-pixel softmax cutoff in `[0, 1]`; lower-confidence pixels are reported as uncertain |
 
 `.env` is ignored by Git. Never commit credentials or generated model artifacts.
 
@@ -137,6 +138,16 @@ imputed with the upstream per-band means before standardization. The accepted
 band order is B1, B2, B3, B4, B5, B6, B7, B8, B8A, B11, B12. Uploads must be
 authentic Sentinel-2 L2A reflectance in this order; the API cannot independently
 prove the source or band identity from a TIFF containing no band descriptions.
+GeoTIFF per-band scale and offset metadata is applied before the model's training
+normalization.
+Per-pixel softmax confidence is compared with `SATELLITE_CONFIDENCE_THRESHOLD`
+(default `0.5`). Below-threshold valid pixels receive class ID 254 (Uncertain);
+invalid pixels remain class ID 255 (NoData). Debris coverage uses only valid,
+above-threshold pixels as its denominator. The response separately reports
+uncertainty, excluded pixels, average confidence, the threshold, and compatibility
+warnings. A missing band order or reflectance-unit declaration is surfaced as a
+warning and prevents the result from being labeled reliable. The default cutoff
+is configurable, not a threshold calibrated to a claimed accuracy.
 
 The original [MARIDA dataset](https://doi.org/10.5281/zenodo.5151941) is publicly
 available under CC BY 4.0 (1.16 GB archive; 4.38 GB uncompressed). The repository
@@ -149,9 +160,9 @@ procedure, but no aggregate evaluation log is included with the released weights
 
 The older registered demo rasters remain available in the catalog but are
 explicitly marked as unverified and cannot be analyzed. Upload a verified
-11-band Sentinel-2 L2A GeoTIFF to run inference. Results include a class-index
-GeoTIFF preserving the input CRS and affine transform; invalid input pixels are
-encoded as NoData value 255.
+11-band Sentinel-2 L2A GeoTIFF to run inference. Results include a class-index GeoTIFF preserving the input CRS and affine
+transform; uncertain pixels are encoded as 254 and invalid input pixels as
+NoData value 255.
 
 If replacing the checkpoint, update its metadata manifest only from the actual
 training artifacts. Version 1 requires `format_version`, `checkpoint_sha256`,

@@ -97,6 +97,11 @@ export interface SatelliteRasterMetadata {
   crs: string | null;
   bounds: number[] | null;
   transform: number[] | null;
+  band_descriptions: Array<string | null> | null;
+  band_scales: number[] | null;
+  band_offsets: number[] | null;
+  band_dtypes: string[] | null;
+  band_units: Array<string | null> | null;
 }
 
 export interface SatelliteCatalogItem {
@@ -118,7 +123,15 @@ export interface SatelliteAnalysis {
   sample_file: string | null;
   debris_pixel_count: number;
   total_pixels: number;
-  debris_coverage_percentage: number;
+  valid_pixel_count: number;
+  confident_pixel_count: number;
+  uncertain_pixel_count: number;
+  uncertain_pixel_percentage: number;
+  excluded_pixel_count: number;
+  excluded_pixel_percentage: number;
+  confidence_threshold: number;
+  average_confidence: number;
+  debris_coverage_percentage: number | null;
   predicted_classes: number[];
   class_statistics: Array<{
     class_id: number;
@@ -132,6 +145,8 @@ export interface SatelliteAnalysis {
   segmentation_mask_geotiff_base64: string;
   overlay_png_base64: string;
   raster_metadata: SatelliteRasterMetadata | null;
+  analysis_reliable: boolean;
+  warnings: string[];
   status: string;
 }
 

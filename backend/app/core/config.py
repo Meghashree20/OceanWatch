@@ -1,5 +1,6 @@
 from typing import List, Literal, Optional
 
+from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 class Settings(BaseSettings):
@@ -30,6 +31,7 @@ class Settings(BaseSettings):
     SATELLITE_MODEL_PATH: str = "models/model.pth"
     SATELLITE_SAMPLES_DIR: str = "samples"
     SATELLITE_DEVICE: str = "cpu"
+    SATELLITE_CONFIDENCE_THRESHOLD: float = Field(default=0.5, ge=0.0, le=1.0)
     
     # CORS
     BACKEND_CORS_ORIGINS: List[str] = ["http://localhost:3000", "http://localhost:5173", "http://127.0.0.1:5173", "http://localhost:8000"]

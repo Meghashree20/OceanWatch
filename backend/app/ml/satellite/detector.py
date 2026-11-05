@@ -170,8 +170,8 @@ class DebrisDetector:
         return checkpoint
 
     @torch.inference_mode()
-    def predict(self, image: Tensor) -> Tensor:
-        """Run forward inference on 11-band imagery tensor and return 2D class mask."""
+    def predict_with_confidence(self, image: Tensor) -> tuple[Tensor, Tensor]:
+        """Return the predicted class and softmax confidence for each pixel."""
         if image.ndim == 3:
             image = image.unsqueeze(0)
         if image.ndim != 4 or image.shape[0] != 1 or image.shape[1] != self.input_bands:
@@ -195,6 +195,18 @@ class DebrisDetector:
             / self.preprocessing["std"]
         )
         logits = self.model(image)
-        return logits.argmax(dim=1).squeeze(0)[:height, :width]
+        if not torch.isfinite(logits).all():
+            raise ValueError("U-Net returned non-finite logits.")
+        confidence, predicted_class = logits.softmax(dim=1).max(dim=1)
+        return (
+            predicted_class.squeeze(0)[:height, :width],
+            confidence.squeeze(0)[:height, :width],
+        )
+
+    @torch.inference_mode()
+    def predict(self, image: Tensor) -> Tensor:
+        """Run inference and return the most likely class for each pixel."""
+        predicted_class, _ = self.predict_with_confidence(image)
+        return predicted_class
 
     __call__ = predict

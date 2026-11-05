@@ -50,6 +50,10 @@ class ObservationService:
         analyzed_at: Optional[datetime] = None,
     ) -> NormalizedObservation:
         analysis = SatelliteAnalysisResponse.model_validate(result)
+        if analysis.debris_coverage_percentage is None:
+            raise ValueError(
+                "Satellite analysis has no sufficiently confident pixels; debris coverage is unavailable."
+            )
         latitude, longitude = analysis.coordinates
 
         # SatelliteService uses (0, 0) as a placeholder when uploaded imagery
@@ -65,6 +69,14 @@ class ObservationService:
             "debris_pixel_count": analysis.debris_pixel_count,
             "total_pixels": analysis.total_pixels,
             "debris_coverage_percentage": analysis.debris_coverage_percentage,
+            "valid_pixel_count": analysis.valid_pixel_count,
+            "confident_pixel_count": analysis.confident_pixel_count,
+            "uncertain_pixel_count": analysis.uncertain_pixel_count,
+            "uncertain_pixel_percentage": analysis.uncertain_pixel_percentage,
+            "average_confidence": analysis.average_confidence,
+            "confidence_threshold": analysis.confidence_threshold,
+            "analysis_reliable": analysis.analysis_reliable,
+            "warnings": analysis.warnings,
             "description": analysis.description,
             "sample_file": analysis.sample_file,
             "raster_metadata": (

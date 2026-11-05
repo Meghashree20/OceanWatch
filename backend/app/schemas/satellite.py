@@ -23,6 +23,11 @@ class SatelliteRasterMetadata(BaseModel):
     crs: Optional[str] = None
     bounds: Optional[List[float]] = None
     transform: Optional[List[float]] = None
+    band_descriptions: Optional[List[Optional[str]]] = None
+    band_scales: Optional[List[float]] = None
+    band_offsets: Optional[List[float]] = None
+    band_dtypes: Optional[List[str]] = None
+    band_units: Optional[List[Optional[str]]] = None
 
 
 class SatelliteClassStatistic(BaseModel):
@@ -42,7 +47,15 @@ class SatelliteAnalysisResponse(BaseModel):
     sample_file: Optional[str] = None
     debris_pixel_count: int
     total_pixels: int
-    debris_coverage_percentage: float
+    valid_pixel_count: int
+    confident_pixel_count: int
+    uncertain_pixel_count: int
+    uncertain_pixel_percentage: float = Field(ge=0.0, le=100.0)
+    excluded_pixel_count: int
+    excluded_pixel_percentage: float = Field(ge=0.0, le=100.0)
+    confidence_threshold: float = Field(ge=0.0, le=1.0)
+    average_confidence: float = Field(ge=0.0, le=1.0)
+    debris_coverage_percentage: Optional[float] = Field(default=None, ge=0.0, le=100.0)
     predicted_classes: List[int] = Field(default_factory=list)
     class_statistics: List[SatelliteClassStatistic] = Field(default_factory=list)
     preview_png_base64: str
@@ -50,4 +63,6 @@ class SatelliteAnalysisResponse(BaseModel):
     segmentation_mask_geotiff_base64: str = ""
     overlay_png_base64: str
     raster_metadata: Optional[SatelliteRasterMetadata] = None
+    analysis_reliable: bool
+    warnings: List[str] = Field(default_factory=list)
     status: str = "success"
