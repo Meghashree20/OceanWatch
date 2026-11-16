@@ -1,0 +1,4 @@
+configuration,independent_scenes,metric,estimate,ci_2_5_pct,ci_97_5_pct,bootstrap_replicates,status
+Original argmax,0,precision/recall/F1/IoU paired scene delta,,,,0,not estimable: no independent image/label pairs locally; pixel bootstrap would be invalid
+Strategy A 0.40,0,precision/recall/F1/IoU paired scene delta,,,,0,not estimable: no independent image/label pairs locally; pixel bootstrap would be invalid
+Strategy B 0.35,0,precision/recall/F1/IoU paired scene delta,,,,0,not estimable: no independent image/label pairs locally; pixel bootstrap would be invalid

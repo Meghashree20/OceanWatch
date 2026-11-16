@@ -9,7 +9,7 @@ from fastapi import APIRouter, Depends, File, Form, HTTPException, Request, Uplo
 from starlette.concurrency import run_in_threadpool
 
 from app.core.auth import require_active_user
-from app.schemas.satellite import HotspotCatalogItem, SatelliteAnalysisResponse
+from app.schemas.satellite import HotspotCatalogItem, SatelliteAnalysisResponse, SatelliteValidationResponse
 from app.services.satellite_service import (
     InvalidSatelliteRasterError,
     SatelliteService,
@@ -33,6 +33,8 @@ async def analyze_satellite(
     request: Request,
     file: Optional[UploadFile] = File(None, description="11-band Sentinel-2 L2A GeoTIFF file"),
     hotspot_id: Optional[str] = Form(None, description="Pre-registered hotspot ID if analyzing local sample"),
+    provenance_manifest_json: Optional[str] = Form(None, description="Signed provenance manifest JSON"),
+    site_id: Optional[str] = Form(None, description="Optional monitoring site for footprint validation"),
 ):
     """
     Analyzes an 11-band Sentinel-2 L2A GeoTIFF for marine debris using the MARIDA U-Net model.
@@ -64,15 +66,21 @@ async def analyze_satellite(
                 raise HTTPException(status_code=413, detail="GeoTIFF upload exceeds the 512 MB limit.")
             if not file_bytes:
                 raise HTTPException(status_code=422, detail="Uploaded file is empty.")
+            site = SatelliteService.CATALOG.get(site_id) if site_id else None
+            if site_id and site is None:
+                raise HTTPException(status_code=404, detail="Unknown monitoring site ID.")
             return await run_in_threadpool(
                 SatelliteService.analyze_geotiff_bytes,
                 file_bytes=file_bytes,
                 site_name=file.filename,
+                provenance_manifest_json=provenance_manifest_json,
+                coordinates=site["coordinates"] if site else None,
             )
         except HTTPException:
             raise
         except InvalidSatelliteRasterError as exc:
-            raise HTTPException(status_code=422, detail=str(exc)) from exc
+            detail = exc.args[0] if exc.args and isinstance(exc.args[0], dict) else {"validation_errors": [str(exc)]}
+            raise HTTPException(status_code=422, detail=detail) from exc
         except SatelliteUnavailableError as exc:
             raise HTTPException(status_code=503, detail=str(exc)) from exc
         except Exception as exc:
@@ -90,7 +98,8 @@ async def analyze_satellite(
         except FileNotFoundError as exc:
             raise HTTPException(status_code=404, detail=str(exc)) from exc
         except InvalidSatelliteRasterError as exc:
-            raise HTTPException(status_code=422, detail=str(exc)) from exc
+            detail = exc.args[0] if exc.args and isinstance(exc.args[0], dict) else {"validation_errors": [str(exc)]}
+            raise HTTPException(status_code=422, detail=detail) from exc
         except SatelliteUnavailableError as exc:
             raise HTTPException(status_code=503, detail=str(exc)) from exc
         except Exception as exc:
@@ -104,6 +113,32 @@ async def analyze_satellite(
     )
 
 
+@router.post("/validate", response_model=SatelliteValidationResponse, summary="Validate a Sentinel-2 input before analysis")
+async def validate_satellite_upload(
+    file: UploadFile = File(..., description="GeoTIFF raster to validate"),
+    provenance_manifest_json: Optional[str] = Form(None, description="Optional signed provenance manifest JSON"),
+    site_id: Optional[str] = Form(None, description="Optional registered site to check coverage against"),
+):
+    filename = file.filename or ""
+    try:
+        if Path(filename).suffix.lower() not in {".tif", ".tiff"}:
+            raise HTTPException(status_code=422, detail="Upload must be a .tif or .tiff GeoTIFF file.")
+        file_bytes = await file.read(MAX_UPLOAD_BYTES + 1)
+        if len(file_bytes) > MAX_UPLOAD_BYTES:
+            raise HTTPException(status_code=413, detail="GeoTIFF upload exceeds the 512 MB limit.")
+        site = SatelliteService.CATALOG.get(site_id) if site_id else None
+        if site_id and site is None:
+            raise HTTPException(status_code=404, detail="Unknown monitoring site ID.")
+        return await run_in_threadpool(
+            SatelliteService.validate_geotiff_bytes,
+            file_bytes,
+            provenance_manifest_json,
+            site["coordinates"] if site else None,
+        )
+    finally:
+        await file.close()
+
+
 @router.post("/hotspots/{hotspot_id}/analyze", response_model=SatelliteAnalysisResponse, summary="Analyze pre-registered hotspot by ID")
 @router.get("/hotspots/{hotspot_id}/analyze", response_model=SatelliteAnalysisResponse, summary="Analyze pre-registered hotspot by ID (GET)")
 async def analyze_hotspot_by_id(hotspot_id: str):
@@ -115,7 +150,8 @@ async def analyze_hotspot_by_id(hotspot_id: str):
     except FileNotFoundError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
     except InvalidSatelliteRasterError as exc:
-        raise HTTPException(status_code=422, detail=str(exc)) from exc
+        detail = exc.args[0] if exc.args and isinstance(exc.args[0], dict) else {"validation_errors": [str(exc)]}
+        raise HTTPException(status_code=422, detail=detail) from exc
     except SatelliteUnavailableError as exc:
         raise HTTPException(status_code=503, detail=str(exc)) from exc
     except Exception as exc:

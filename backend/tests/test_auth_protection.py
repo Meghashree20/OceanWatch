@@ -13,6 +13,8 @@ PROTECTED_REQUESTS = [
     ("GET", "/api/forecast/model-metrics"),
     ("GET", "/api/recommendations"),
     ("GET", "/api/satellite/catalog"),
+    ("POST", "/api/satellite/validate"),
+    ("POST", "/api/satellite/analyze"),
 ]
 
 

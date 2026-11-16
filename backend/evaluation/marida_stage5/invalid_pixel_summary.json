@@ -1,0 +1,129 @@
+{
+  "validation_patch_count": 328,
+  "pixel_count": 21495808,
+  "invalid_pixels": 74516,
+  "invalid_pixel_pct": 0.3466536359089177,
+  "invalid_labeled_pixels": 0,
+  "invalid_unlabeled_pixels": 74516,
+  "invalid_labeled_cloud_pixels": 0,
+  "invalid_labeled_noncloud_pixels": 0,
+  "invalid_pixels_touching_outer_4_pixel_border": 4368,
+  "patches_with_invalid_pixels": 3,
+  "source_scenes_with_invalid_pixels": 1,
+  "affected_patches": [
+    {
+      "roi": "18-9-20_16PCC_47",
+      "invalid_pixels": 44592,
+      "invalid_pct_patch": 68.0419921875,
+      "invalid_on_outer_4_pixel_border": 2384,
+      "row_bounds": [
+        0,
+        255
+      ],
+      "column_bounds": [
+        0,
+        201
+      ]
+    },
+    {
+      "roi": "18-9-20_16PCC_48",
+      "invalid_pixels": 29864,
+      "invalid_pct_patch": 45.56884765625,
+      "invalid_on_outer_4_pixel_border": 1924,
+      "row_bounds": [
+        0,
+        255
+      ],
+      "column_bounds": [
+        0,
+        145
+      ]
+    },
+    {
+      "roi": "18-9-20_16PCC_50",
+      "invalid_pixels": 60,
+      "invalid_pct_patch": 0.091552734375,
+      "invalid_on_outer_4_pixel_border": 60,
+      "row_bounds": [
+        0,
+        17
+      ],
+      "column_bounds": [
+        0,
+        5
+      ]
+    }
+  ],
+  "frozen_candidate_prediction_counts": {
+    "A_0.40": {
+      "valid_imagery_predictions": 4654,
+      "invalid_imagery_predictions_separately_reported": 14,
+      "unlabeled_valid_predictions_separately_reported": 3718,
+      "labeled_pixels_excluded_pct": 1.1759626845360438
+    },
+    "B_0.35": {
+      "valid_imagery_predictions": 6497,
+      "invalid_imagery_predictions_separately_reported": 26,
+      "unlabeled_valid_predictions_separately_reported": 5451,
+      "labeled_pixels_excluded_pct": 0.0
+    }
+  },
+  "band_counts": [
+    {
+      "band_index_1_based": 1,
+      "masked_samples": 0,
+      "nonfinite_samples": 69710
+    },
+    {
+      "band_index_1_based": 2,
+      "masked_samples": 0,
+      "nonfinite_samples": 65929
+    },
+    {
+      "band_index_1_based": 3,
+      "masked_samples": 0,
+      "nonfinite_samples": 67551
+    },
+    {
+      "band_index_1_based": 4,
+      "masked_samples": 0,
+      "nonfinite_samples": 69067
+    },
+    {
+      "band_index_1_based": 5,
+      "masked_samples": 0,
+      "nonfinite_samples": 69572
+    },
+    {
+      "band_index_1_based": 6,
+      "masked_samples": 0,
+      "nonfinite_samples": 70024
+    },
+    {
+      "band_index_1_based": 7,
+      "masked_samples": 0,
+      "nonfinite_samples": 70604
+    },
+    {
+      "band_index_1_based": 8,
+      "masked_samples": 0,
+      "nonfinite_samples": 66571
+    },
+    {
+      "band_index_1_based": 9,
+      "masked_samples": 0,
+      "nonfinite_samples": 71188
+    },
+    {
+      "band_index_1_based": 10,
+      "masked_samples": 0,
+      "nonfinite_samples": 73052
+    },
+    {
+      "band_index_1_based": 11,
+      "masked_samples": 0,
+      "nonfinite_samples": 74516
+    }
+  ],
+  "semantics": "All invalid pixels arise from non-finite source samples; raster validity masks flag zero samples. Clouds are a semantic class, not automatically invalid imagery. The large contiguous diagonal regions resemble nodata/coverage gaps, but the TIFF metadata alone does not identify the upstream cause. No pixels are reassigned."
+}

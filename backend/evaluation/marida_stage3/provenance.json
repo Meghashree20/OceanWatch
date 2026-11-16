@@ -1,0 +1,21 @@
+{
+  "official_dataset": "10.5281/zenodo.5151941",
+  "version": "1.0.0",
+  "release_date": "2021-08-01",
+  "archive_filename": "MARIDA.zip",
+  "expected_archive_md5": "9bf32266f6e3711c9dfa3699b856c76f",
+  "archive_md5_observed": "9bf32266f6e3711c9dfa3699b856c76f",
+  "archive_checksum_verified": true,
+  "expected_patch_count": 1381,
+  "expected_test_scene_count": 359,
+  "paper_reported_test_annotated_pixels": 194843,
+  "dataset_license": "CC-BY-4.0",
+  "attribution": "Kikaki, Kakogeorgiou, Mikeli, Raitsos & Karantzalos (2022), PLOS ONE 17(1):e0262247, doi:10.1371/journal.pone.0262247",
+  "evaluation_code": {
+    "repository": "https://github.com/marine-debris/marine-debris.github.io",
+    "revision": "8de83a3394edfbe867d9fa825439666369ec6282",
+    "license": "MIT"
+  },
+  "test_split_sha256": "dd60f04ea8fba011c7b97c233a4e06fe8ee81fafa84916e2c324d27d68fd07ee",
+  "checkpoint_sha256": "7a690027cf279b31cae45a3188f2d4faa011b222f42b5e92c9ec6b1fd46d1b37"
+}

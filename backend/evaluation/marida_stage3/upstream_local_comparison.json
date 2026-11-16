@@ -1,0 +1,9 @@
+{
+  "scenes": 359,
+  "exact_prediction_scenes": 359,
+  "exact_prediction_pixels": 23527424,
+  "compared_pixels": 23527424,
+  "logits_allclose_scenes": 359,
+  "max_absolute_logit_difference": 0.0,
+  "max_absolute_probability_difference": 0.0
+}

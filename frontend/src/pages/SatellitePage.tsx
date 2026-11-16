@@ -4,7 +4,7 @@ import { PageHeader } from '@/components/layout/PageShell';
 import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
 import { Card, CardBody, CardHeader } from '@/components/ui/Card';
-import { oceanWatchApi, type SatelliteAnalysis, type SatelliteCatalogItem } from '@/lib/api/client';
+import { oceanWatchApi, type SatelliteAnalysis, type SatelliteCatalogItem, type SatelliteValidation } from '@/lib/api/client';
 
 const ACCEPTED_EXTENSIONS = ['.tif', '.tiff'];
 
@@ -23,9 +23,15 @@ function geotiffDataUrl(base64: string) {
 
 export function SatellitePage() {
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const manifestInputRef = useRef<HTMLInputElement>(null);
   const [catalog, setCatalog] = useState<SatelliteCatalogItem[]>([]);
   const [analysis, setAnalysis] = useState<SatelliteAnalysis | null>(null);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [manifestFile, setManifestFile] = useState<File | null>(null);
+  const [manifestJson, setManifestJson] = useState<string | undefined>();
+  const [siteId, setSiteId] = useState<string>('');
+  const [validation, setValidation] = useState<SatelliteValidation | null>(null);
+  const [validationLoading, setValidationLoading] = useState(false);
   const [dragging, setDragging] = useState(false);
   const [loading, setLoading] = useState(false);
   const [catalogLoading, setCatalogLoading] = useState(true);
@@ -35,10 +41,19 @@ export function SatellitePage() {
     let active = true;
     oceanWatchApi.getSatelliteCatalog()
       .then((items) => { if (active) setCatalog(items); })
-      .catch(() => null)
+      .catch((requestError: Error) => { if (active) setError(requestError.message); })
       .finally(() => { if (active) setCatalogLoading(false); });
     return () => { active = false; };
   }, []);
+
+  const refreshValidation = (file: File, manifest?: string, selectedSite = siteId) => {
+    setValidationLoading(true);
+    setValidation(null);
+    oceanWatchApi.validateSatellite(file, manifest, selectedSite || undefined)
+      .then(setValidation)
+      .catch((requestError: Error) => setError(requestError.message))
+      .finally(() => setValidationLoading(false));
+  };
 
   const selectFile = (file: File) => {
     if (!isGeoTiff(file)) {
@@ -52,13 +67,14 @@ export function SatellitePage() {
     setSelectedFile(file);
     setAnalysis(null);
     setError(null);
+    refreshValidation(file, manifestJson);
   };
 
   const analyzeFile = () => {
     if (!selectedFile) return;
     setError(null);
     setLoading(true);
-    oceanWatchApi.analyzeSatellite(selectedFile)
+    oceanWatchApi.analyzeSatellite(selectedFile, manifestJson, siteId || undefined)
       .then(setAnalysis)
       .catch((requestError: Error) => setError(requestError.message))
       .finally(() => setLoading(false));
@@ -108,6 +124,41 @@ export function SatellitePage() {
                   event.target.value = '';
                 }}
               />
+              <input
+                ref={manifestInputRef}
+                type="file"
+                accept=".json,application/json"
+                className="sr-only"
+                onChange={async (event) => {
+                  const file = event.target.files?.[0];
+                  event.target.value = '';
+                  if (!file) return;
+                  try {
+                    const contents = await file.text();
+                    setManifestFile(file);
+                    setManifestJson(contents);
+                    if (selectedFile) refreshValidation(selectedFile, contents);
+                    setError(null);
+                  } catch {
+                    setError('The provenance manifest could not be read. Choose a valid JSON file.');
+                  }
+                }}
+              />
+              <label className="mb-3 block text-xs font-medium text-navy-800">
+                Check coverage for a monitoring site (optional)
+                <select
+                  className="mt-1 block w-full rounded-lg border border-ocean-200 bg-white px-3 py-2 text-xs"
+                  value={siteId}
+                  onChange={(event) => {
+                    const nextSite = event.target.value;
+                    setSiteId(nextSite);
+                    if (selectedFile) refreshValidation(selectedFile, manifestJson, nextSite);
+                  }}
+                >
+                  <option value="">No specific site selected</option>
+                  {catalog.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}
+                </select>
+              </label>
               <div
                 role="button"
                 tabIndex={0}
@@ -126,10 +177,40 @@ export function SatellitePage() {
               {selectedFile && (
                 <div className="mt-3 rounded-lg border border-ocean-100 bg-white p-3 text-xs">
                   <p className="truncate font-semibold text-navy-900">{selectedFile.name}</p>
-                  <p className="mt-1 text-ocean-500">{(selectedFile.size / (1024 * 1024)).toFixed(2)} MB · {selectedFile.type || 'GeoTIFF image'} · Ready to analyze</p>
+                  <p className="mt-1 text-ocean-500">{(selectedFile.size / (1024 * 1024)).toFixed(2)} MB · {selectedFile.type || 'GeoTIFF image'} </p>
                 </div>
               )}
-              <Button className="mt-4 w-full" disabled={!selectedFile || loading} onClick={analyzeFile}>
+              <div className="mt-3 flex flex-wrap items-center gap-2">
+                <Button variant="ghost" size="sm" disabled={!selectedFile || validationLoading} onClick={() => manifestInputRef.current?.click()}>
+                  {manifestFile ? `Manifest: ${manifestFile.name}` : 'Add signed provenance manifest'}
+                </Button>
+                <span className="text-[11px] text-ocean-500">A trusted server signature is required for production inference.</span>
+              </div>
+              {validationLoading ? (
+                <div className="mt-3 rounded-lg border border-ocean-100 bg-ocean-50 p-3 text-xs text-ocean-600" role="status">
+                  <LoaderCircle className="mr-2 inline h-3.5 w-3.5 animate-spin" />Checking raster bands, calibration, pixels and geographic coverage…
+                </div>
+              ) : validation && (
+                <div className={`mt-3 rounded-lg border p-3 text-xs ${validation.compatibility_status === 'VERIFIED_COMPATIBLE' ? 'border-emerald-200 bg-emerald-50 text-emerald-800' : validation.compatibility_status === 'DECLARED_UNVERIFIED' ? 'border-amber-300 bg-amber-50 text-amber-900' : 'border-red-200 bg-red-50 text-red-800'}`} role="status">
+                  <strong>{validation.compatibility_status.replace(/_/g, ' ')}</strong>
+                  <p className="mt-1">{validation.detected_band_count === null ? 'Band count unavailable' : `${validation.detected_band_count} bands`} · CRS {validation.crs ?? 'missing'} · {validation.reflectance_calibration_status.replace(/_/g, ' ').toLowerCase()} · provenance {validation.source_provenance_status.toLowerCase()}</p>
+                  <p className="mt-1">Bands: {validation.verified_band_identities?.join(', ') ?? 'identity/order not verified; expected B1, B2, B3, B4, B5, B6, B7, B8, B8A, B11, B12'}</p>
+                  <p className="mt-1">Resolution: {validation.spatial_resolution_m === null ? 'unavailable' : `${validation.spatial_resolution_m.toFixed(2)} m/pixel`} · WGS84 bounds: {validation.geographic_bounds?.map((value) => value.toFixed(5)).join(', ') ?? 'unavailable'}</p>
+                  {validation.validation_errors.map((message) => <p className="mt-1" key={message}>{message}</p>)}
+                  {validation.validation_warnings.map((message) => <p className="mt-1" key={message}>{message}</p>)}
+                  {validation.invalid_pixel_percentage !== null && <p className="mt-1">Invalid pixels: {validation.invalid_pixel_percentage.toFixed(2)}%</p>}
+                  {validation.band_statistics.length > 0 && (
+                    <details className="mt-2">
+                      <summary className="cursor-pointer font-medium">Per-band min, max, mean and standard deviation</summary>
+                      <div className="mt-2 grid grid-cols-2 gap-x-3 gap-y-1 font-mono text-[10px] sm:grid-cols-3">
+                        {validation.band_statistics.map((stats, index) => <p key={index}>Band {index + 1}: {stats.minimum?.toPrecision(3) ?? 'N/A'}–{stats.maximum?.toPrecision(3) ?? 'N/A'} · μ {stats.mean?.toPrecision(3) ?? 'N/A'} · σ {stats.standard_deviation?.toPrecision(3) ?? 'N/A'}</p>)}
+                      </div>
+                    </details>
+                  )}
+                  {validation.compatibility_status === 'DECLARED_UNVERIFIED' && <p className="mt-1">Band descriptions and a user supplied manifest do not independently establish imagery provenance.</p>}
+                </div>
+              )}
+              <Button className="mt-4 w-full" disabled={!selectedFile || loading || validationLoading || !validation?.inference_permitted} onClick={analyzeFile}>
                 {loading ? <><LoaderCircle className="h-4 w-4 animate-spin" /> Analyzing…</> : <><Satellite className="h-4 w-4" /> Analyze Satellite Image</>}
               </Button>
 
@@ -148,13 +229,13 @@ export function SatellitePage() {
                       <div key={item.id} className="flex items-center justify-between gap-3 rounded-lg border border-ocean-100 bg-white p-3">
                         <div className="min-w-0">
                           <p className="truncate text-xs font-semibold text-navy-900">{item.name}</p>
-                          <p className="mt-0.5 truncate text-[11px] text-ocean-500">{item.description}</p>
+                          <p className="mt-0.5 text-[11px] text-ocean-500">{item.description} {item.unavailability_reason}</p>
                         </div>
                         <Button
                           variant="ghost"
                           size="sm"
                           disabled={!item.has_local_sample || !item.inference_available || loading}
-                          title={item.inference_available ? 'Analyze verified sample' : 'Bundled sample imagery is not verified'}
+                          title={item.inference_available ? 'Analyze verified sample' : (item.unavailability_reason ?? 'Bundled sample imagery is not verified')}
                           onClick={() => analyzeCatalogItem(item)}
                         >
                           {item.inference_available ? 'Analyze' : 'Unverified'}
@@ -234,6 +315,7 @@ function AnalysisResult({ analysis }: { analysis: SatelliteAnalysis }) {
         <Metric label="Excluded from debris coverage" value={`${analysis.excluded_pixel_percentage.toFixed(2)}%`} />
         <Metric label="Confident pixels / threshold" value={`${analysis.confident_pixel_count.toLocaleString()} · ${(analysis.confidence_threshold * 100).toFixed(0)}%`} />
       </div>
+      <p className="text-[11px] text-ocean-500">Softmax confidence is uncalibrated and does not establish prediction accuracy. Debris coverage uses only valid pixels above the configured confidence threshold.</p>
       <div className={`flex items-start gap-2 rounded-lg border px-3 py-2.5 text-xs ${analysis.analysis_reliable ? 'border-emerald-200 bg-emerald-50 text-emerald-800' : 'border-amber-300 bg-amber-50 text-amber-900'}`}>
         {analysis.analysis_reliable ? <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0" /> : <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />}
         <div>

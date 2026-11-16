@@ -38,7 +38,8 @@ except (ImportError, OSError) as exc:
     _DETECTOR_IMPORT_ERROR = exc
 else:
     _DETECTOR_IMPORT_ERROR = None
-from app.schemas.satellite import HotspotCatalogItem, SatelliteAnalysisResponse, SatelliteRasterMetadata
+from app.schemas.satellite import HotspotCatalogItem, SatelliteAnalysisResponse, SatelliteRasterMetadata, SatelliteValidationResponse
+from app.services.satellite_validation import validate_satellite_raster
 
 logger = logging.getLogger(__name__)
 
@@ -95,33 +96,41 @@ class SatelliteService:
             "id": "accra-coast",
             "name": "Accra Coast, Ghana",
             "coordinates": [5.55, -0.20],
-            "description": "Bundled GeoTIFF sample; satellite imagery and georeferencing provenance are unverified.",
+            "description": "Bundled GeoTIFF demonstration sample.",
             "sample_file": "samples/accra-coast.tif",
             "inference_available": False,
+            "validation_status": "DECLARED_UNVERIFIED",
+            "unavailability_reason": "Bundled imagery provenance and geospatial footprint are unverified.",
         },
         "gulf-of-honduras": {
             "id": "gulf-of-honduras",
             "name": "Gulf of Honduras",
             "coordinates": [15.80, -87.90],
-            "description": "Bundled GeoTIFF sample; satellite imagery and georeferencing provenance are unverified.",
+            "description": "Bundled GeoTIFF demonstration sample.",
             "sample_file": "samples/gulf-of-honduras.tif",
             "inference_available": False,
+            "validation_status": "DECLARED_UNVERIFIED",
+            "unavailability_reason": "Bundled imagery provenance and geospatial footprint are unverified.",
         },
         "durban-harbor": {
             "id": "durban-harbor",
             "name": "Durban Harbor, South Africa",
             "coordinates": [-29.86, 31.02],
-            "description": "Bundled GeoTIFF sample; satellite imagery and georeferencing provenance are unverified.",
+            "description": "Bundled GeoTIFF demonstration sample.",
             "sample_file": "samples/durban-harbor.tif",
             "inference_available": False,
+            "validation_status": "DECLARED_UNVERIFIED",
+            "unavailability_reason": "Bundled imagery provenance and geospatial footprint are unverified.",
         },
         "coastal-demo-site": {
             "id": "coastal-demo-site",
             "name": "Coastal Demo Site",
             "coordinates": [12.91, 74.85],
-            "description": "Bundled GeoTIFF sample; satellite imagery and georeferencing provenance are unverified.",
+            "description": "Bundled GeoTIFF demonstration sample.",
             "sample_file": "samples/coastal-demo-site.tif",
             "inference_available": False,
+            "validation_status": "DECLARED_UNVERIFIED",
+            "unavailability_reason": "Bundled imagery provenance and geospatial footprint are unverified.",
         },
     }
 
@@ -193,6 +202,8 @@ class SatelliteService:
                     sample_file=item["sample_file"],
                     has_local_sample=sample_path.is_file(),
                     inference_available=item["inference_available"],
+                    validation_status=item["validation_status"],
+                    unavailability_reason=item["unavailability_reason"],
                 )
             )
         return items
@@ -263,7 +274,8 @@ class SatelliteService:
             band_units=list(dataset.units),
         )
         valid_pixels = ~np.ma.getmaskarray(masked_bands).any(axis=0)
-        bands = np.asarray(masked_bands.filled(np.nan), dtype=np.float32)
+        bands = np.asarray(masked_bands.data, dtype=np.float32).copy()
+        bands[np.ma.getmaskarray(masked_bands)] = np.nan
         scales = np.asarray(dataset.scales, dtype=np.float32)[:, None, None]
         offsets = np.asarray(dataset.offsets, dtype=np.float32)[:, None, None]
         if not np.isfinite(scales).all() or not np.isfinite(offsets).all():
@@ -374,6 +386,7 @@ class SatelliteService:
         meta: SatelliteRasterMetadata,
         site_info: Dict[str, Any],
         valid_pixels: np.ndarray,
+        compatibility_verified: bool = False,
     ) -> SatelliteAnalysisResponse:
         """Shared analysis engine: runs forward segmentation and builds structured result."""
         detector = cls.get_detector()
@@ -447,7 +460,7 @@ class SatelliteService:
                 "percentage": round((pixel_count / total_pixels) * 100.0, 4) if total_pixels else 0.0,
             })
 
-        warnings = cls._input_warnings(meta)
+        warnings = [] if compatibility_verified else cls._input_warnings(meta)
         if confident_pixel_count == 0:
             warnings.append(
                 "No valid pixels meet the configured confidence threshold; debris coverage is unavailable."
@@ -541,10 +554,17 @@ class SatelliteService:
         sample_path = _BACKEND_ROOT / hotspot["sample_file"]
         if not sample_path.is_file():
             raise FileNotFoundError(f"Hotspot sample GeoTIFF not found: {sample_path}")
-
+        manifest_path = sample_path.with_name(f"{sample_path.name}.manifest.json")
+        manifest_json = manifest_path.read_text(encoding="utf-8") if manifest_path.is_file() else None
         try:
+            sample_bytes = sample_path.read_bytes()
+            validation, bands, valid_pixels = validate_satellite_raster(
+                sample_bytes, manifest_json, site_coordinates=hotspot["coordinates"]
+            )
+            if not validation.inference_permitted:
+                raise InvalidSatelliteRasterError(validation.to_dict())
             with rasterio.open(sample_path) as dataset:
-                bands, meta, valid_pixels = cls._validate_and_read_dataset(dataset)
+                _, meta, _ = cls._validate_and_read_dataset(dataset)
         except Exception as exc:
             if isinstance(exc, (InvalidSatelliteRasterError, FileNotFoundError)):
                 raise
@@ -552,7 +572,7 @@ class SatelliteService:
                 f"Error opening GeoTIFF file '{sample_path.name}': {exc}"
             ) from exc
 
-        return cls._execute_analysis(bands, meta, hotspot, valid_pixels)
+        return cls._execute_analysis(bands, meta, hotspot, valid_pixels, compatibility_verified=True)
 
     @classmethod
     def analyze_geotiff_bytes(
@@ -560,6 +580,7 @@ class SatelliteService:
         file_bytes: bytes,
         site_name: Optional[str] = None,
         coordinates: Optional[List[float]] = None,
+        provenance_manifest_json: Optional[str] = None,
     ) -> SatelliteAnalysisResponse:
         """Analyze a user-uploaded Sentinel-2 GeoTIFF supplied as bytes."""
         if MemoryFile is None:
@@ -567,14 +588,21 @@ class SatelliteService:
         if not file_bytes:
             raise InvalidSatelliteRasterError("Uploaded file payload is empty.")
 
+        validation, bands, valid_pixels = validate_satellite_raster(
+            file_bytes,
+            provenance_manifest_json,
+            site_coordinates=coordinates,
+        )
+        if not validation.inference_permitted or validation.compatibility_status != "VERIFIED_COMPATIBLE":
+            raise InvalidSatelliteRasterError(validation.to_dict())
         try:
             with MemoryFile(file_bytes) as mem_file:
                 with mem_file.open() as dataset:
-                    bands, meta, valid_pixels = cls._validate_and_read_dataset(dataset)
+                    _, meta, _ = cls._validate_and_read_dataset(dataset)
         except Exception as exc:
             if isinstance(exc, InvalidSatelliteRasterError):
                 raise
-            raise InvalidSatelliteRasterError(f"Invalid or unreadable GeoTIFF file: {exc}") from exc
+            raise InvalidSatelliteRasterError("Validated GeoTIFF could not be read for inference.") from exc
 
         # Estimate centroid coordinates from GeoTIFF bounds if available and not supplied
         coords = coordinates or [0.0, 0.0]
@@ -593,4 +621,13 @@ class SatelliteService:
             "description": "User-uploaded Sentinel-2 L2A 11-band GeoTIFF patch.",
             "sample_file": None,
         }
-        return cls._execute_analysis(bands, meta, custom_site, valid_pixels)
+        return cls._execute_analysis(bands, meta, custom_site, valid_pixels, compatibility_verified=True)
+
+    @staticmethod
+    def validate_geotiff_bytes(
+        file_bytes: bytes,
+        provenance_manifest_json: Optional[str] = None,
+        site_coordinates: Optional[List[float]] = None,
+    ) -> SatelliteValidationResponse:
+        result, _, _ = validate_satellite_raster(file_bytes, provenance_manifest_json, site_coordinates)
+        return SatelliteValidationResponse(**result.to_dict())

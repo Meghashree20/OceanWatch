@@ -60,10 +60,18 @@ if settings.BACKEND_CORS_ORIGINS:
 # Global exception handlers
 @app.exception_handler(HTTPException)
 async def http_exception_handler(request: Request, exc: HTTPException):
+    detail = exc.detail
+    if isinstance(detail, dict) and isinstance(detail.get("validation_errors"), list):
+        message = " ".join(str(item) for item in detail["validation_errors"])
+    else:
+        message = detail if isinstance(detail, str) else "Request could not be completed."
+    content = {"error": {"code": f"http_{exc.status_code}", "message": message}}
+    if isinstance(detail, dict):
+        content["error"]["details"] = detail
     return JSONResponse(
         status_code=exc.status_code,
         headers=exc.headers,
-        content={"error": {"code": f"http_{exc.status_code}", "message": str(exc.detail)}},
+        content=content,
     )
 
 

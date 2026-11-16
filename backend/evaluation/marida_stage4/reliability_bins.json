@@ -1,0 +1,430 @@
+{
+  "raw_top_label": [
+    {
+      "lower": 0.0,
+      "upper": 0.06666666666666667,
+      "count": 0,
+      "mean_score": null,
+      "observed_frequency": null
+    },
+    {
+      "lower": 0.06666666666666667,
+      "upper": 0.13333333333333333,
+      "count": 0,
+      "mean_score": null,
+      "observed_frequency": null
+    },
+    {
+      "lower": 0.13333333333333333,
+      "upper": 0.2,
+      "count": 1,
+      "mean_score": 0.1856134912690817,
+      "observed_frequency": 0.0
+    },
+    {
+      "lower": 0.2,
+      "upper": 0.26666666666666666,
+      "count": 109,
+      "mean_score": 0.24193155309670902,
+      "observed_frequency": 0.21100917431192662
+    },
+    {
+      "lower": 0.26666666666666666,
+      "upper": 0.3333333333333333,
+      "count": 675,
+      "mean_score": 0.3106205523421327,
+      "observed_frequency": 0.4740740740740741
+    },
+    {
+      "lower": 0.3333333333333333,
+      "upper": 0.4,
+      "count": 1721,
+      "mean_score": 0.36938077052714136,
+      "observed_frequency": 0.5764090644973853
+    },
+    {
+      "lower": 0.4,
+      "upper": 0.4666666666666667,
+      "count": 3202,
+      "mean_score": 0.43443507527485675,
+      "observed_frequency": 0.5936914428482198
+    },
+    {
+      "lower": 0.4666666666666667,
+      "upper": 0.5333333333333333,
+      "count": 8686,
+      "mean_score": 0.5055655849618499,
+      "observed_frequency": 0.7858623071609486
+    },
+    {
+      "lower": 0.5333333333333333,
+      "upper": 0.6,
+      "count": 6748,
+      "mean_score": 0.5615911442707816,
+      "observed_frequency": 0.6280379371665679
+    },
+    {
+      "lower": 0.6,
+      "upper": 0.6666666666666666,
+      "count": 5935,
+      "mean_score": 0.6342356608061194,
+      "observed_frequency": 0.5984835720303285
+    },
+    {
+      "lower": 0.6666666666666666,
+      "upper": 0.7333333333333333,
+      "count": 7776,
+      "mean_score": 0.6981230307522159,
+      "observed_frequency": 0.6696244855967078
+    },
+    {
+      "lower": 0.7333333333333333,
+      "upper": 0.8,
+      "count": 9880,
+      "mean_score": 0.7717140663476425,
+      "observed_frequency": 0.9021255060728745
+    },
+    {
+      "lower": 0.8,
+      "upper": 0.8666666666666667,
+      "count": 41091,
+      "mean_score": 0.828551084879135,
+      "observed_frequency": 0.9904601980969069
+    },
+    {
+      "lower": 0.8666666666666667,
+      "upper": 0.9333333333333333,
+      "count": 21708,
+      "mean_score": 0.9098314118538512,
+      "observed_frequency": 0.9991247466371844
+    },
+    {
+      "lower": 0.9333333333333333,
+      "upper": 1.0,
+      "count": 105570,
+      "mean_score": 0.9674594895809606,
+      "observed_frequency": 0.9999715828360329
+    }
+  ],
+  "temperature_scaled_top_label": [
+    {
+      "lower": 0.0,
+      "upper": 0.06666666666666667,
+      "count": 0,
+      "mean_score": null,
+      "observed_frequency": null
+    },
+    {
+      "lower": 0.06666666666666667,
+      "upper": 0.13333333333333333,
+      "count": 0,
+      "mean_score": null,
+      "observed_frequency": null
+    },
+    {
+      "lower": 0.13333333333333333,
+      "upper": 0.2,
+      "count": 0,
+      "mean_score": null,
+      "observed_frequency": null
+    },
+    {
+      "lower": 0.2,
+      "upper": 0.26666666666666666,
+      "count": 10,
+      "mean_score": 0.2524659216167421,
+      "observed_frequency": 0.2
+    },
+    {
+      "lower": 0.26666666666666666,
+      "upper": 0.3333333333333333,
+      "count": 95,
+      "mean_score": 0.31391234608870877,
+      "observed_frequency": 0.21052631578947367
+    },
+    {
+      "lower": 0.3333333333333333,
+      "upper": 0.4,
+      "count": 362,
+      "mean_score": 0.37385030821530824,
+      "observed_frequency": 0.430939226519337
+    },
+    {
+      "lower": 0.4,
+      "upper": 0.4666666666666667,
+      "count": 898,
+      "mean_score": 0.4349819333120706,
+      "observed_frequency": 0.5189309576837416
+    },
+    {
+      "lower": 0.4666666666666667,
+      "upper": 0.5333333333333333,
+      "count": 2349,
+      "mean_score": 0.504351708339797,
+      "observed_frequency": 0.5840783312047679
+    },
+    {
+      "lower": 0.5333333333333333,
+      "upper": 0.6,
+      "count": 3371,
+      "mean_score": 0.5701999243924396,
+      "observed_frequency": 0.7018688816374963
+    },
+    {
+      "lower": 0.6,
+      "upper": 0.6666666666666666,
+      "count": 5936,
+      "mean_score": 0.6346188205124605,
+      "observed_frequency": 0.8202493261455526
+    },
+    {
+      "lower": 0.6666666666666666,
+      "upper": 0.7333333333333333,
+      "count": 5460,
+      "mean_score": 0.6958786221755369,
+      "observed_frequency": 0.6851648351648352
+    },
+    {
+      "lower": 0.7333333333333333,
+      "upper": 0.8,
+      "count": 3782,
+      "mean_score": 0.7683828743319707,
+      "observed_frequency": 0.4775251189846642
+    },
+    {
+      "lower": 0.8,
+      "upper": 0.8666666666666667,
+      "count": 4921,
+      "mean_score": 0.8369921288193244,
+      "observed_frequency": 0.508230034545824
+    },
+    {
+      "lower": 0.8666666666666667,
+      "upper": 0.9333333333333333,
+      "count": 8909,
+      "mean_score": 0.9027462394445993,
+      "observed_frequency": 0.7524974744640252
+    },
+    {
+      "lower": 0.9333333333333333,
+      "upper": 1.0,
+      "count": 177009,
+      "mean_score": 0.9863936058068252,
+      "observed_frequency": 0.9938703681733697
+    }
+  ],
+  "raw_marine_debris_ovr": [
+    {
+      "lower": 0.0,
+      "upper": 0.06666666666666667,
+      "count": 209203,
+      "mean_score": 0.00512597016127011,
+      "observed_frequency": 0.00019598189318508817
+    },
+    {
+      "lower": 0.06666666666666667,
+      "upper": 0.13333333333333333,
+      "count": 1633,
+      "mean_score": 0.09256290078251397,
+      "observed_frequency": 0.05021432945499082
+    },
+    {
+      "lower": 0.13333333333333333,
+      "upper": 0.2,
+      "count": 677,
+      "mean_score": 0.16374155633044424,
+      "observed_frequency": 0.0723781388478582
+    },
+    {
+      "lower": 0.2,
+      "upper": 0.26666666666666666,
+      "count": 300,
+      "mean_score": 0.2313701046014092,
+      "observed_frequency": 0.19
+    },
+    {
+      "lower": 0.26666666666666666,
+      "upper": 0.3333333333333333,
+      "count": 203,
+      "mean_score": 0.2987624709109431,
+      "observed_frequency": 0.2955665024630542
+    },
+    {
+      "lower": 0.3333333333333333,
+      "upper": 0.4,
+      "count": 146,
+      "mean_score": 0.3672835023144249,
+      "observed_frequency": 0.4041095890410959
+    },
+    {
+      "lower": 0.4,
+      "upper": 0.4666666666666667,
+      "count": 120,
+      "mean_score": 0.427890279127939,
+      "observed_frequency": 0.55
+    },
+    {
+      "lower": 0.4666666666666667,
+      "upper": 0.5333333333333333,
+      "count": 106,
+      "mean_score": 0.49726303468548494,
+      "observed_frequency": 0.6320754716981132
+    },
+    {
+      "lower": 0.5333333333333333,
+      "upper": 0.6,
+      "count": 113,
+      "mean_score": 0.5662867281378009,
+      "observed_frequency": 0.6194690265486725
+    },
+    {
+      "lower": 0.6,
+      "upper": 0.6666666666666666,
+      "count": 79,
+      "mean_score": 0.6307319776320964,
+      "observed_frequency": 0.6962025316455697
+    },
+    {
+      "lower": 0.6666666666666666,
+      "upper": 0.7333333333333333,
+      "count": 142,
+      "mean_score": 0.7012365789967765,
+      "observed_frequency": 0.8309859154929577
+    },
+    {
+      "lower": 0.7333333333333333,
+      "upper": 0.8,
+      "count": 157,
+      "mean_score": 0.767647888614189,
+      "observed_frequency": 0.9044585987261147
+    },
+    {
+      "lower": 0.8,
+      "upper": 0.8666666666666667,
+      "count": 135,
+      "mean_score": 0.8344443896582197,
+      "observed_frequency": 0.9333333333333333
+    },
+    {
+      "lower": 0.8666666666666667,
+      "upper": 0.9333333333333333,
+      "count": 84,
+      "mean_score": 0.8889271132421707,
+      "observed_frequency": 0.9404761904761905
+    },
+    {
+      "lower": 0.9333333333333333,
+      "upper": 1.0,
+      "count": 4,
+      "mean_score": 0.9459312522185154,
+      "observed_frequency": 1.0
+    }
+  ],
+  "temperature_scaled_marine_debris_ovr": [
+    {
+      "lower": 0.0,
+      "upper": 0.06666666666666667,
+      "count": 210639,
+      "mean_score": 0.0010229511680053117,
+      "observed_frequency": 0.0005412103171777307
+    },
+    {
+      "lower": 0.06666666666666667,
+      "upper": 0.13333333333333333,
+      "count": 622,
+      "mean_score": 0.09568314921495732,
+      "observed_frequency": 0.07395498392282958
+    },
+    {
+      "lower": 0.13333333333333333,
+      "upper": 0.2,
+      "count": 334,
+      "mean_score": 0.16605398783969152,
+      "observed_frequency": 0.1437125748502994
+    },
+    {
+      "lower": 0.2,
+      "upper": 0.26666666666666666,
+      "count": 203,
+      "mean_score": 0.2303993561558261,
+      "observed_frequency": 0.1330049261083744
+    },
+    {
+      "lower": 0.26666666666666666,
+      "upper": 0.3333333333333333,
+      "count": 121,
+      "mean_score": 0.3026377989426183,
+      "observed_frequency": 0.3140495867768595
+    },
+    {
+      "lower": 0.3333333333333333,
+      "upper": 0.4,
+      "count": 96,
+      "mean_score": 0.3681210693394621,
+      "observed_frequency": 0.2708333333333333
+    },
+    {
+      "lower": 0.4,
+      "upper": 0.4666666666666667,
+      "count": 77,
+      "mean_score": 0.4317167455169813,
+      "observed_frequency": 0.37662337662337664
+    },
+    {
+      "lower": 0.4666666666666667,
+      "upper": 0.5333333333333333,
+      "count": 95,
+      "mean_score": 0.5024792465924459,
+      "observed_frequency": 0.4105263157894737
+    },
+    {
+      "lower": 0.5333333333333333,
+      "upper": 0.6,
+      "count": 77,
+      "mean_score": 0.5655756935671765,
+      "observed_frequency": 0.4805194805194805
+    },
+    {
+      "lower": 0.6,
+      "upper": 0.6666666666666666,
+      "count": 63,
+      "mean_score": 0.6354813889972467,
+      "observed_frequency": 0.6190476190476191
+    },
+    {
+      "lower": 0.6666666666666666,
+      "upper": 0.7333333333333333,
+      "count": 71,
+      "mean_score": 0.701562553752504,
+      "observed_frequency": 0.6338028169014085
+    },
+    {
+      "lower": 0.7333333333333333,
+      "upper": 0.8,
+      "count": 83,
+      "mean_score": 0.7711986098827721,
+      "observed_frequency": 0.6144578313253012
+    },
+    {
+      "lower": 0.8,
+      "upper": 0.8666666666666667,
+      "count": 88,
+      "mean_score": 0.8365501575345501,
+      "observed_frequency": 0.6590909090909091
+    },
+    {
+      "lower": 0.8666666666666667,
+      "upper": 0.9333333333333333,
+      "count": 186,
+      "mean_score": 0.9068831426452595,
+      "observed_frequency": 0.8387096774193549
+    },
+    {
+      "lower": 0.9333333333333333,
+      "upper": 1.0,
+      "count": 347,
+      "mean_score": 0.9644703040917793,
+      "observed_frequency": 0.9279538904899135
+    }
+  ]
+}

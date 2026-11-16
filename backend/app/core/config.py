@@ -32,6 +32,9 @@ class Settings(BaseSettings):
     SATELLITE_SAMPLES_DIR: str = "samples"
     SATELLITE_DEVICE: str = "cpu"
     SATELLITE_CONFIDENCE_THRESHOLD: float = Field(default=0.5, ge=0.0, le=1.0)
+    # Ed25519 PEM public key managed by the deployment. Never accept an upload's
+    # own public key as a trust anchor.
+    SATELLITE_PROVENANCE_PUBLIC_KEY: Optional[str] = None
     
     # CORS
     BACKEND_CORS_ORIGINS: List[str] = ["http://localhost:3000", "http://localhost:5173", "http://127.0.0.1:5173", "http://localhost:8000"]

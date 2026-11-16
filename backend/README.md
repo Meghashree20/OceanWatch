@@ -164,6 +164,106 @@ explicitly marked as unverified and cannot be analyzed. Upload a verified
 transform; uncertain pixels are encoded as 254 and invalid input pixels as
 NoData value 255.
 
+### Satellite input validation
+
+`POST /api/satellite/validate` inspects a GeoTIFF before analysis and returns a
+compatibility status, band and pixel statistics, calibrated reflectance status,
+CRS, resolution, geographic bounds, provenance status, and whether inference is
+permitted. `POST /api/satellite/analyze` reruns the same validation and rejects
+every input except `VERIFIED_COMPATIBLE`; a preflight result is not an inference
+authorization token.
+
+Production verification requires a deployment-managed Ed25519 PEM public key
+in `SATELLITE_PROVENANCE_PUBLIC_KEY`. The caller may submit a JSON envelope in
+the `provenance_manifest_json` form field, with a signed `payload` containing
+the raster SHA-256, Sentinel-2 product identifier, acquisition date and
+processing baseline, L2A processing level, ordered band identities, stored-value representation,
+reflectance units, raster scales and offsets, calibration method, source
+metadata references, pixel size, and a product-specific maximum invalid-pixel
+fraction. The signature is checked against the server key and the hash binds
+the manifest to the exact uploaded bytes. A caller-supplied key, TIFF tags, or
+unsigned sidecar cannot authorize inference. For already calibrated
+surface-reflectance values, scales must be identity and offsets zero; signed
+UInt16 digital-number products use the per-band calibration recorded in the
+trusted manifest from the cited source product metadata, applied once. If TIFF
+scale/offset tags are present they must agree with that calibration. Missing or
+contradictory calibration is rejected.
+
+For UInt16 L2A digital numbers, the manifest must include per-band
+`quantification_values` and `boa_add_offsets`. The verifier checks that the
+effective affine calibration is exactly `scale = 1 / quantification_value` and
+`offset = boa_add_offset / quantification_value`, as specified in the
+[Sentinel-2 Products Specification](https://sentinels.copernicus.eu/documents/d/sentinel/s2-pdgs-cs-di-psd-v15-0).
+DN 0 is masked as product NoData. These values must come from the source
+product metadata; they are not defaults or application constants.
+
+The signature is base64 Ed25519 over the UTF-8 encoding of the payload serialized
+as canonical JSON (`sort_keys=true`, compact separators `(',', ':')`,
+`ensure_ascii=false`). The envelope has this shape; values must come from the
+trusted Sentinel-2 product record:
+
+```json
+{
+  "payload": {
+    "raster_sha256": "<sha256 of uploaded TIFF bytes>",
+    "source_product_id": "<Sentinel-2 product identifier>",
+    "acquisition_date": "2024-05-02",
+    "processing_level": "L2A",
+    "processing_baseline": "<baseline from source metadata>",
+    "band_order": ["B1", "B2", "B3", "B4", "B5", "B6", "B7", "B8", "B8A", "B11", "B12"],
+    "stored_values": "surface_reflectance",
+    "reflectance_units": "1",
+    "calibration_method": "identity_reflectance",
+    "raster_scales": [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
+    "raster_offsets": [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+    "source_metadata_refs": ["<immutable reference to original product metadata>"],
+    "pixel_size_m": 10,
+    "max_invalid_pixel_fraction": 0.05
+  },
+  "signature": "<base64 Ed25519 signature>"
+}
+```
+
+The key must be managed outside source control and distributed only after the
+imagery verification process is established. This repository does not contain
+a production trust key or a production-signed imagery manifest, so the current
+four sample sites and ordinary uploads remain unavailable for inference.
+
+#### Trusted imagery issuance workflow
+
+The signature is an authorization statement from the organization that controls
+the private key. It does not independently prove that an uploaded image is
+genuine Sentinel-2 data. The current application verifies signatures and raster
+hashes, but does not implement product retrieval, source-metadata parsing, or a
+manifest signing service. A production trust signer must perform these checks
+before issuing an envelope:
+
+1. Obtain the original Sentinel-2 L2A SAFE product from an authorized Copernicus
+   source. Preserve the original product identifier, acquisition date, baseline,
+   `manifest.safe`, product metadata XML, source files, and their checksums.
+2. Verify the product identity and processing level from the preserved source
+   metadata. Verify each image file's band identity, tile, CRS, affine grid,
+   and native resolution. Record the original file references and the chosen
+   common model grid and resampling operation.
+3. Stack exactly B1, B2, B3, B4, B5, B6, B7, B8, B8A, B11, B12 into the model's
+   channel order, excluding B10. Produce a co-registered 10 m grid consistent
+   with the MARIDA training patches and preserve its CRS and transform.
+4. Either export unitless calibrated surface reflectance as float data with
+   identity scale/zero offset, or retain UInt16 DN and copy the exact per-band
+   quantification and BOA offset fields from the source metadata. Do not apply
+   the calibration twice. Keep DN 0 as NoData.
+5. Independently validate the output pixels and invalid-pixel policy against
+   the source product. Compute the exact output TIFF SHA-256 and prepare the
+   complete manifest from the preserved product record.
+6. Sign only the canonical manifest payload with an isolated organizational
+   signing service. Keep the private key out of OceanWatch, its uploads, and the
+   frontend. Configure only the corresponding Ed25519 public key in
+   `SATELLITE_PROVENANCE_PUBLIC_KEY`.
+
+Steps 1–6 are an operational trust procedure, not a tool implemented in this
+repository. Until an accountable signer and product-verification process exist,
+do not issue production signatures. The unit tests use ephemeral test keys only.
+
 If replacing the checkpoint, update its metadata manifest only from the actual
 training artifacts. Version 1 requires `format_version`, `checkpoint_sha256`,
 `task`, `architecture` (`name`, `input_bands`, `output_classes`, and

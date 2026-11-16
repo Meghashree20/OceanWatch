@@ -12,6 +12,25 @@ class HotspotCatalogItem(BaseModel):
     sample_file: str
     has_local_sample: bool = True
     inference_available: bool = False
+    validation_status: str = "DECLARED_UNVERIFIED"
+    unavailability_reason: Optional[str] = None
+
+
+class SatelliteValidationResponse(BaseModel):
+    compatibility_status: str
+    validation_warnings: List[str] = Field(default_factory=list)
+    validation_errors: List[str] = Field(default_factory=list)
+    detected_band_count: Optional[int] = None
+    verified_band_identities: Optional[List[str]] = None
+    crs: Optional[str] = None
+    spatial_resolution_m: Optional[float] = None
+    geographic_bounds: Optional[List[float]] = None
+    reflectance_calibration_status: str = "UNKNOWN"
+    source_provenance_status: str = "UNVERIFIED"
+    invalid_pixel_percentage: Optional[float] = None
+    inference_permitted: bool = False
+    raster_metadata: Optional[Dict[str, Any]] = None
+    band_statistics: List[Dict[str, Optional[float]]] = Field(default_factory=list)
 
 
 class SatelliteRasterMetadata(BaseModel):

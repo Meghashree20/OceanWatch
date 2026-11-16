@@ -61,42 +61,29 @@ def test_analyze_registered_hotspot_by_id_endpoint(client):
     assert "not verified Sentinel-2 imagery" in response.json()["error"]["message"]
 
 
-def test_analyze_uploaded_geotiff(client):
+def test_analyze_uploaded_unverified_geotiff_is_rejected_before_inference(client, monkeypatch):
     assert SAMPLE_TIF.is_file(), f"Sample GeoTIFF not found at {SAMPLE_TIF}"
     with SAMPLE_TIF.open("rb") as sample_file:
         file_bytes = sample_file.read()
-    with rasterio.open(SAMPLE_TIF) as source:
-        expected_transform = source.transform
+    monkeypatch.setattr(SatelliteService, "_detector", None)
 
     response = client.post(
         "/api/satellite/analyze",
         files={"file": ("marida-test.tif", file_bytes, "image/tiff")},
     )
-    assert response.status_code == 200
-    data = response.json()
-    assert data["id"] == "custom-upload"
-    assert data["total_pixels"] == 256 * 256
-    assert sum(item["pixel_count"] for item in data["class_statistics"]) == data["total_pixels"]
-    assert data["confident_pixel_count"] + data["uncertain_pixel_count"] == data["valid_pixel_count"]
-    assert data["excluded_pixel_count"] == data["uncertain_pixel_count"] + data["total_pixels"] - data["valid_pixel_count"]
-    assert data["confidence_threshold"] == 0.5
-    assert 0.0 <= data["average_confidence"] <= 1.0
-    assert data["analysis_reliable"] is False
-    assert any("does not identify all bands" in warning for warning in data["warnings"])
-    assert data["raster_metadata"]["count"] == 11
-    assert data["raster_metadata"]["crs"] == "EPSG:32616"
-    assert data["predicted_classes"]
-    assert len(data["preview_png_base64"]) > 100
-    assert len(data["overlay_png_base64"]) > 100
+    assert response.status_code == 422
+    validation = response.json()["error"]["details"]
+    assert validation["compatibility_status"] == "DECLARED_UNVERIFIED"
+    assert validation["inference_permitted"] is False
+    assert SatelliteService._detector is None
 
-    encoded_mask = base64.b64decode(data["segmentation_mask_geotiff_base64"])
-    with MemoryFile(encoded_mask) as memory_file:
-        with memory_file.open() as dataset:
-            mask = dataset.read(1)
-            assert (dataset.width, dataset.height) == (256, 256)
-            assert dataset.crs.to_string() == "EPSG:32616"
-            assert dataset.transform == expected_transform
-            assert set(np.unique(mask)).issubset(set(range(11)) | {UNCERTAIN_CLASS_ID, INVALID_CLASS_ID})
+    preflight = client.post(
+        "/api/satellite/validate",
+        files={"file": ("marida-test.tif", file_bytes, "image/tiff")},
+    )
+    assert preflight.status_code == 200
+    assert preflight.json()["compatibility_status"] == "DECLARED_UNVERIFIED"
+    assert preflight.json()["detected_band_count"] == 11
 
 
 def test_analyze_unknown_hotspot_returns_404(client):
@@ -126,7 +113,7 @@ def test_analyze_invalid_file_returns_422(client):
         files={"file": ("fake.tif", fake_bytes, "image/tiff")},
     )
     assert response.status_code == 422
-    assert "Invalid or unreadable GeoTIFF" in response.json()["error"]["message"]
+    assert "corrupted or unreadable" in response.json()["error"]["message"]
 
 
 def test_analyze_rejects_non_geotiff_extension(client):

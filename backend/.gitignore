@@ -7,3 +7,12 @@ env/
 .pytest_cache/
 models/*.joblib
 *.joblib
+venv*/
+.venv*/
+data/MARIDA.zip
+data/MARIDA.zip.parts/
+data/MARIDA/
+data/patches/
+data/splits/
+data/shapefiles/
+data/labels_mapping.txt

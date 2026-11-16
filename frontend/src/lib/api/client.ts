@@ -112,6 +112,25 @@ export interface SatelliteCatalogItem {
   sample_file: string;
   has_local_sample: boolean;
   inference_available: boolean;
+  validation_status: string;
+  unavailability_reason: string | null;
+}
+
+export interface SatelliteValidation {
+  compatibility_status: 'VERIFIED_COMPATIBLE' | 'DECLARED_UNVERIFIED' | 'INCOMPATIBLE' | 'INVALID';
+  validation_warnings: string[];
+  validation_errors: string[];
+  detected_band_count: number | null;
+  verified_band_identities: string[] | null;
+  crs: string | null;
+  spatial_resolution_m: number | null;
+  geographic_bounds: number[] | null;
+  reflectance_calibration_status: string;
+  source_provenance_status: string;
+  invalid_pixel_percentage: number | null;
+  inference_permitted: boolean;
+  raster_metadata: Record<string, unknown> | null;
+  band_statistics: Array<Record<string, number | null>>;
 }
 
 export interface SatelliteAnalysis {
@@ -293,8 +312,8 @@ export class OceanWatchApiClient {
       if (!response.ok) {
         let detail = `status ${response.status}`;
         try {
-          const errorBody = await response.json() as { error?: { message?: string }; detail?: string };
-          detail = errorBody.error?.message ?? errorBody.detail ?? detail;
+          const errorBody = await response.json() as { error?: { message?: string; details?: { validation_errors?: string[] } }; detail?: string };
+          detail = errorBody.error?.details?.validation_errors?.join(' ') ?? errorBody.error?.message ?? errorBody.detail ?? detail;
         } catch {
           // Preserve the status message when the server does not return JSON.
         }
@@ -409,13 +428,23 @@ export class OceanWatchApiClient {
     return this.requestJson<SatelliteCatalogItem[]>('/api/satellite/catalog', { signal: undefined });
   }
 
-  analyzeSatellite(file: File) {
+  analyzeSatellite(file: File, manifestJson?: string, siteId?: string) {
     const body = new FormData();
     body.append('file', file);
+    if (manifestJson) body.append('provenance_manifest_json', manifestJson);
+    if (siteId) body.append('site_id', siteId);
     return this.requestJson<SatelliteAnalysis>('/api/satellite/analyze', {
       method: 'POST',
       body,
     });
+  }
+
+  validateSatellite(file: File, manifestJson?: string, siteId?: string) {
+    const body = new FormData();
+    body.append('file', file);
+    if (manifestJson) body.append('provenance_manifest_json', manifestJson);
+    if (siteId) body.append('site_id', siteId);
+    return this.requestJson<SatelliteValidation>('/api/satellite/validate', { method: 'POST', body });
   }
 
   analyzeRegisteredSatellite(hotspotId: string) {
