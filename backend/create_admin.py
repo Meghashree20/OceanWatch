@@ -32,6 +32,10 @@ async def create_admin(email: str, password: str) -> None:
         existing = await db.users.find_one({"email": normalized_email})
 
         if existing:
+            await db.users.update_one(
+                {"email": normalized_email},
+                {"$set": {"is_admin": True}},
+            )
             print("Admin account already exists!")
             return
 
@@ -42,6 +46,7 @@ async def create_admin(email: str, password: str) -> None:
             email=normalized_email,
             password_hash=hash_password(password),
             is_active=True,
+            is_admin=True,
             created_at=now,
             updated_at=now,
         )

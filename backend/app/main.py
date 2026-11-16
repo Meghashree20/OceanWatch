@@ -8,7 +8,7 @@ from app.core.config import settings
 from app.core.logging_config import logger
 from app.db.mongodb import connect_to_mongo, close_mongo_connection
 from app.db.indexes import create_indexes
-from app.routes import auth, health, data, hotspots, forecast, recommendations, satellite
+from app.routes import auth, health, data, hotspots, forecast, recommendations, satellite, intelligence, cleanup, citizen_reports
 from app.services.satellite_service import SatelliteService
 
 
@@ -19,28 +19,40 @@ OPENAPI_TAGS = [
     {"name": "Forecasting", "description": "Model-based pollution concentration forecasts."},
     {"name": "Recommendations", "description": "Transparent cleanup priority recommendations."},
     {"name": "Satellite", "description": "Sentinel-2 MARIDA U-Net coastal debris segmentation."},
+    {"name": "Intelligence", "description": "Observed pollution trends and early-warning information."},
+    {"name": "Cleanup", "description": "Evidence-backed cleanup response and impact tracking."},
+    {"name": "Citizen Reports", "description": "Private, moderated community pollution submissions, separate from verified observations."},
     {"name": "Authentication", "description": "User registration and cookie-based authentication."},
 ]
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # Startup: connect to MongoDB, create indexes, and load U-Net ONCE
+    app.state.startup_ready = False
     try:
         await connect_to_mongo()
         await create_indexes()
     except RuntimeError as exc:
-        logger.warning(f"MongoDB startup unavailable; health endpoints remain available: {exc}")
+        await close_mongo_connection()
+        if settings.OCEANWATCH_ENV == "staging":
+            raise RuntimeError(
+                "Staging startup requires MongoDB connectivity and index initialization."
+            ) from exc
+        logger.warning("MongoDB startup unavailable; readiness will remain unhealthy.")
+    else:
+        app.state.startup_ready = True
     try:
         SatelliteService.initialize()
     except Exception as exc:
         logger.warning(f"Satellite U-Net initialization deferred or failed: {exc}")
-    yield
-    # Shutdown: close MongoDB connection
-    await close_mongo_connection()
+    try:
+        yield
+    finally:
+        app.state.startup_ready = False
+        await close_mongo_connection()
 
 app = FastAPI(
     title=settings.PROJECT_NAME,
-    description="OceanWatch pollution data, hotspot, forecasting, and cleanup recommendation API.",
+    description="OceanWatch pollution data, hotspot, observed-trend intelligence, forecasting, and cleanup recommendation API.",
     version="1.0.0",
     openapi_tags=OPENAPI_TAGS,
     openapi_url=f"{settings.API_V1_STR}/openapi.json",
@@ -117,3 +129,6 @@ app.include_router(hotspots.router, prefix="/api/hotspots", tags=["Hotspots"])
 app.include_router(forecast.router, prefix="/api/forecast", tags=["Forecasting"])
 app.include_router(recommendations.router, prefix="/api/recommendations", tags=["Recommendations"])
 app.include_router(satellite.router, prefix="/api/satellite", tags=["Satellite"])
+app.include_router(intelligence.router, prefix="/api/intelligence", tags=["Intelligence"])
+app.include_router(cleanup.router, prefix="/api/cleanup", tags=["Cleanup"])
+app.include_router(citizen_reports.router, prefix="/api/citizen-reports", tags=["Citizen Reports"])

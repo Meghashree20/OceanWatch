@@ -200,6 +200,26 @@ async def test_inactive_user_is_rejected(auth_client):
 @pytest.mark.asyncio
 async def test_logout_clears_authentication_cookie(auth_client):
     client, _ = auth_client
+    await client.post(
+        "/api/auth/signup",
+        json={
+            "full_name": "Ocean Researcher",
+            "email": "researcher@example.com",
+            "password": "secure-password",
+            "password_confirmation": "secure-password",
+        },
+    )
+    await client.post(
+        "/api/auth/login",
+        json={"email": "researcher@example.com", "password": "secure-password"},
+    )
+    assert (await client.get("/api/auth/me")).status_code == 200
+
+    protected_logout = await client.post("/api/auth/logout")
+
+    assert protected_logout.status_code == 200
+    assert (await client.get("/api/auth/me")).status_code == 401
+
     client.cookies.set(settings.AUTH_COOKIE_NAME, "token")
 
     response = await client.post("/api/auth/logout")

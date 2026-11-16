@@ -48,3 +48,14 @@ async def require_active_user(
             detail="User account is inactive",
         )
     return current_user
+
+
+async def require_admin_user(
+    current_user: Annotated[User, Depends(require_active_user)],
+) -> User:
+    if not current_user.is_admin:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Administrator authorization required",
+        )
+    return current_user

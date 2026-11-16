@@ -2,6 +2,9 @@ __pycache__/
 *.py[cod]
 *$py.class
 .env
+.env.*
+!.env.example
+!.env.*.example
 venv/
 env/
 .pytest_cache/
@@ -16,3 +19,4 @@ data/patches/
 data/splits/
 data/shapefiles/
 data/labels_mapping.txt
+private_media/

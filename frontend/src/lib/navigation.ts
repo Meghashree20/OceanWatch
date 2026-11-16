@@ -1,8 +1,10 @@
 import {
   BarChart3,
+  ClipboardList,
   Compass,
   Database,
   Flame,
+  Flag,
   Home,
   Info,
   LayoutDashboard,
@@ -36,6 +38,8 @@ export const navItems: NavItem[] = [
   { label: 'Data Explorer', shortLabel: 'Data', path: '/data', description: 'Query and filter raw observation data', icon: Database },
   { label: 'Model Insights', shortLabel: 'Models', path: '/models', description: 'ML model performance and architecture', icon: BarChart3 },
   { label: 'About OceanWatch', shortLabel: 'About', path: '/about', description: 'About the OceanWatch project', icon: Info },
+  { label: 'Cleanup Operations', shortLabel: 'Cleanup', path: '/cleanup', description: 'Manage cleanup response operations and evidence', icon: ClipboardList },
+  { label: 'Citizen Reports', shortLabel: 'Reports', path: '/reports', description: 'Submit and moderate community pollution reports', icon: Flag },
 ];
 
 // Desktop nav: Home + Platform dropdown + direct links + CTA
@@ -50,6 +54,8 @@ export const platformNavItems: NavItem[] = [
   navItems[4], // Priority
   navItems[5], // Intelligence
   navItems[6], // Satellite
+  navItems[10], // Cleanup operations
+  navItems[11], // Citizen reports
 ];
 
 export const dashboardPlatformNavItems: NavItem[] = platformNavItems;

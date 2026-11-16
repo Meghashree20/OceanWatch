@@ -14,6 +14,7 @@ class User(BaseModel):
     email: str = Field(min_length=3, max_length=320)
     password_hash: str = Field(min_length=1)
     is_active: bool = True
+    is_admin: bool = False
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
     updated_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 

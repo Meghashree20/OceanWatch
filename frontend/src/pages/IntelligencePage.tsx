@@ -30,11 +30,14 @@ import { SharedFilterBar } from '@/components/SharedFilterBar';
 import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
 import { Card, CardBody, CardHeader } from '@/components/ui/Card';
+import { AlertManagementPanel, OrganizationDirectoryPanel } from '@/components/AlertManagementPanel';
+import { ObservedTrendsPanel } from '@/components/ObservedTrendsPanel';
 import {
   oceanWatchApi,
   getSavedRecommendationContext,
   type Hotspot,
   type PollutionObservation,
+  type PollutionTrendAssessment,
   type Recommendation,
 } from '@/lib/api/client';
 import { useDashboardFilters, type DashboardFilters } from '@/lib/dashboardFilters';
@@ -58,6 +61,9 @@ export function IntelligencePage() {
   const [filteredCount, setFilteredCount] = useState<number | null>(null);
   const [hotspots, setHotspots] = useState<Hotspot[]>([]);
   const [recommendations, setRecommendations] = useState<Recommendation[]>([]);
+  const [trendAssessment, setTrendAssessment] = useState<PollutionTrendAssessment | null>(null);
+  const [trendLoading, setTrendLoading] = useState<boolean>(true);
+  const [trendError, setTrendError] = useState<string | null>(null);
   const [recommendationError, setRecommendationError] = useState<string | null>(null);
   const [totalUnfilteredObs, setTotalUnfilteredObs] = useState<number | null>(null);
 
@@ -75,6 +81,19 @@ export function IntelligencePage() {
       .then((dataStats) => setTotalUnfilteredObs(dataStats.total_observations))
       .catch(() => null);
   }, []);
+
+  const fetchTrendAssessment = useCallback(() => {
+    setTrendLoading(true);
+    setTrendError(null);
+    oceanWatchApi.assessPollutionRisk()
+      .then(setTrendAssessment)
+      .catch((requestError: Error) => setTrendError(requestError.message))
+      .finally(() => setTrendLoading(false));
+  }, []);
+
+  useEffect(() => {
+    fetchTrendAssessment();
+  }, [fetchTrendAssessment]);
 
   useEffect(() => {
     oceanWatchApi.getAllObservations()
@@ -184,8 +203,8 @@ export function IntelligencePage() {
   return (
     <div className="min-h-screen bg-ocean-50/60 pb-16">
       <PageHeader
-        title="OceanWatch Intelligence Dashboard"
-        description="Unified marine environmental surveillance tracking microplastic pollution trends, high-density cluster hotspots, and transparent cleanup interventions."
+        title="Ocean Pollution Early Warning Center"
+        description="Observed pollution risks, emerging measured changes, existing hotspot evidence, and transparent cleanup priorities. This center does not label observations as forecasts."
       >
         <div className="flex flex-wrap items-center gap-2">
           <Badge variant="cyan" icon={<Waves className="h-3.5 w-3.5" />}>
@@ -218,6 +237,18 @@ export function IntelligencePage() {
           availableOceans={availableOceans}
           datePresets={DATE_PRESETS}
         />
+
+        <ObservedTrendsPanel
+          assessment={trendAssessment}
+          loading={trendLoading}
+          error={trendError}
+          onRefresh={fetchTrendAssessment}
+        />
+        <AlertManagementPanel
+          alerts={trendAssessment?.alerts?.data ?? []}
+          onRefresh={fetchTrendAssessment}
+        />
+        <OrganizationDirectoryPanel />
 
         {(filters.startDate || filters.endDate) && (
           <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-xs leading-5 text-amber-900">
@@ -295,6 +326,7 @@ export function IntelligencePage() {
         <GeographicHotspotMap
           hotspots={hotspots}
           observations={observations}
+          trends={trendAssessment?.trends ?? []}
           resetTrigger={globalResetKey}
           selectedOcean={filters.ocean}
         />
@@ -1279,11 +1311,13 @@ function PrimaryTrendChart({
 function GeographicHotspotMap({
   hotspots,
   observations,
+  trends,
   resetTrigger,
   selectedOcean,
 }: {
   hotspots: Hotspot[];
   observations: PollutionObservation[];
+  trends: NonNullable<PollutionTrendAssessment['trends']>;
   resetTrigger: number;
   selectedOcean: string;
 }) {
@@ -1642,6 +1676,36 @@ function GeographicHotspotMap({
               <path d="M 460 70 Q 640 40 820 90 Q 780 180 680 190 Q 560 160 480 120 Z" />
               <path d="M 460 160 Q 550 160 550 260 Q 510 370 470 340 Q 430 250 460 160 Z" />
               <path d="M 760 280 Q 840 280 840 360 Q 770 380 750 330 Z" />
+            </g>
+
+            <g aria-label="Observed pollution risk cells" pointerEvents="none">
+              {trends.map((trend) => {
+                const color = {
+                  LOW: '#06b6d4',
+                  MEDIUM: '#14b8a6',
+                  HIGH: '#f97316',
+                  CRITICAL: '#ef4444',
+                }[trend.risk_level];
+                const width = (trend.location.cell_size_degrees / 360) * baseWidth;
+                const height = (trend.location.cell_size_degrees / 180) * baseHeight;
+                return (
+                  <rect
+                    key={`risk-cell-${trend.location.latitude}-${trend.location.longitude}`}
+                    x={lonToX(trend.location.longitude) - width / 2}
+                    y={latToY(trend.location.latitude) - height / 2}
+                    width={width}
+                    height={height}
+                    fill={color}
+                    fillOpacity={0.28}
+                    stroke={color}
+                    strokeWidth={0.75}
+                  >
+                    <title>
+                      {`${trend.risk_level} observed risk; mean ${trend.comparison.recent_mean_pieces_m3.toFixed(3)} pieces/m3; ${trend.evidence.recent_observation_count} observations; ${trend.evidence.baseline_available ? trend.trend_direction : 'no comparable baseline'}`}
+                    </title>
+                  </rect>
+                );
+              })}
             </g>
 
             {showObsPoints &&

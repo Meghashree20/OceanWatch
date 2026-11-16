@@ -13,6 +13,8 @@ const ForecastPage = lazy(() => import('@/pages/ForecastPage').then(({ ForecastP
 const PriorityPage = lazy(() => import('@/pages/PriorityPage').then(({ PriorityPage: page }) => ({ default: page })));
 const DataExplorerPage = lazy(() => import('@/pages/DataExplorerPage').then(({ DataExplorerPage: page }) => ({ default: page })));
 const IntelligencePage = lazy(() => import('@/pages/IntelligencePage').then(({ IntelligencePage: page }) => ({ default: page })));
+const CleanupOperationsPage = lazy(() => import('@/pages/CleanupOperationsPage').then(({ CleanupOperationsPage: page }) => ({ default: page })));
+const CitizenReportsPage = lazy(() => import('@/pages/CitizenReportsPage').then(({ CitizenReportsPage: page }) => ({ default: page })));
 const SatellitePage = lazy(() => import('@/pages/SatellitePage').then(({ SatellitePage: page }) => ({ default: page })));
 const LoginPage = lazy(() => import('@/pages/LoginPage').then(({ LoginPage: page }) => ({ default: page })));
 const SignupPage = lazy(() => import('@/pages/SignupPage').then(({ SignupPage: page }) => ({ default: page })));
@@ -86,6 +88,8 @@ function App() {
                 <Route path="/forecast" element={<ForecastPage />} />
                 <Route path="/priority" element={<PriorityPage />} />
                 <Route path="/intelligence" element={<IntelligencePage />} />
+                <Route path="/cleanup" element={<CleanupOperationsPage />} />
+                <Route path="/reports" element={<CitizenReportsPage />} />
                 <Route path="/data" element={<DataExplorerPage />} />
                 <Route path="/satellite" element={<SatellitePage />} />
               </Route>

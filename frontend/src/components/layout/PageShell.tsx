@@ -8,7 +8,9 @@ import { useAuth } from '@/lib/authContext';
 import {
   ChevronLeft,
   ChevronRight,
+  ClipboardList,
   Compass,
+  Flag,
   LayoutDashboard,
   LogOut,
   MapPin,
@@ -117,6 +119,8 @@ function DashboardSidebarContent({
     { label: 'Hotspots Module', path: '/hotspots', icon: MapPin },
     { label: 'Forecast Module', path: '/forecast', icon: TrendingUp },
     { label: 'Priority Module', path: '/priority', icon: Target },
+    { label: 'Cleanup Operations', path: '/cleanup', icon: ClipboardList },
+    { label: 'Citizen Reports', path: '/reports', icon: Flag },
     { label: 'Satellite Module', path: '/satellite', icon: Satellite },
   ];
 

@@ -1,8 +1,8 @@
 # OceanWatch Backend
 
 OceanWatch is a FastAPI service for marine microplastic observations, geographic
-hotspot detection, model-based concentration forecasting, and transparent cleanup
-priority recommendations.
+hotspot detection, measured-trend early warnings, model-based concentration
+forecasting, and transparent cleanup priority recommendations.
 
 ## Architecture
 
@@ -16,6 +16,7 @@ FastAPI REST API
 	+--> preprocessing and DBSCAN services
 	+--> XGBoost forecasting service
 	+--> rule-based recommendation service
+	+--> observed-trend and alert intelligence service
 ```
 
 The backend owns data access and all ML logic. The frontend communicates only over
@@ -32,29 +33,79 @@ source venv/bin/activate     # Linux/macOS
 pip install -r requirements.txt
 ```
 
-## Environment variables
+## Environment profiles
 
-Copy `.env.example` to `.env` and change values for the deployment environment:
+The backend selects a profile before importing the application. Set
+`OCEANWATCH_ENV` to `development`, `test`, or `staging` **before the Python
+process starts**; it loads `backend/.env.<profile>`. The tracked
+`.env.example`, `.env.test.example`, and `.env.staging.example` files are safe
+templates, not files that the application loads directly. Copy the appropriate
+template to `.env.development`, `.env.test`, or `.env.staging`, then provide
+values through an untracked file or the deployment secret manager. Do not copy
+production credentials into development or test.
 
-| Variable | Default | Purpose |
-| --- | --- | --- |
-| `MONGODB_URL` | `mongodb://localhost:27017` | MongoDB connection string; may contain credentials outside source control |
-| `MONGODB_DB_NAME` | `oceanwatch` | Database name |
-| `MONGODB_SERVER_SELECTION_TIMEOUT_MS` | `5000` | Maximum time to find a MongoDB server |
-| `MONGODB_CONNECT_TIMEOUT_MS` | `5000` | MongoDB connection timeout |
-| `PROJECT_NAME` | `OceanWatch API` | API title |
-| `API_V1_STR` | `/api/v1` | OpenAPI JSON path prefix |
-| `BACKEND_CORS_ORIGINS` | localhost origins | Explicit JSON list of allowed browser origins |
-| `SATELLITE_CONFIDENCE_THRESHOLD` | `0.5` | Per-pixel softmax cutoff in `[0, 1]`; lower-confidence pixels are reported as uncertain |
+Generate a signing secret locally with:
 
-`.env` is ignored by Git. Never commit credentials or generated model artifacts.
+```powershell
+python -c "import secrets; print(secrets.token_urlsafe(48))"
+```
+
+Set the generated value as `AUTH_JWT_SECRET` in the backend environment only.
+It must be at least 32 characters. Staging additionally requires a non-placeholder
+secret, `AUTH_COOKIE_SECURE=true`, HTTPS-only CORS origins, a remote TLS-enabled
+MongoDB endpoint, and a database named `oceanwatch_staging_<unique-suffix>`.
+Staging startup fails if MongoDB or index initialization is unavailable. The
+development and test profiles use separate database names; the test suite
+overrides its MongoDB URL and will not select a staging or production profile.
+
+`AUTH_JWT_SECRET`, MongoDB credentials, SMTP credentials, and satellite signing
+keys are server-only. Never put them in a frontend `.env` file. `VITE_*` values
+are embedded in public browser assets.
+
+### Backend setting reference
+
+All settings are case-sensitive. Bracketed values are validation constraints;
+the profile templates show the main values required for each deployment.
+
+| Variable(s) | Purpose |
+| --- | --- |
+| `OCEANWATCH_ENV` | Selects `development`, `test`, or `staging` and the matching profile file. |
+| `PROJECT_NAME`, `API_V1_STR` | API title and OpenAPI path prefix. |
+| `MONGODB_URL`, `MONGODB_DB_NAME` | MongoDB endpoint and isolated database name; staging requires a remote TLS endpoint and staging-prefixed DB name. |
+| `MONGODB_SERVER_SELECTION_TIMEOUT_MS`, `MONGODB_CONNECT_TIMEOUT_MS` | MongoDB selection and connection timeouts. |
+| `DBSCAN_EPS_KM`, `DBSCAN_MIN_SAMPLES` | Existing hotspot-clustering parameters. |
+| `POLLUTION_RISK_MEDIUM_THRESHOLD`, `POLLUTION_RISK_HIGH_THRESHOLD`, `POLLUTION_RISK_CRITICAL_THRESHOLD` | Measured-pollution risk thresholds in pieces/m³. |
+| `POLLUTION_TREND_WINDOW_DAYS`, `POLLUTION_TREND_MIN_OBSERVATIONS`, `POLLUTION_TREND_MIN_RELATIVE_CHANGE`, `POLLUTION_TREND_CELL_SIZE_DEGREES`, `POLLUTION_DATA_FRESHNESS_MAX_DAYS` | Observation trend comparison windows, evidence minimums, cell size, and freshness. |
+| `AUTH_JWT_SECRET`, `AUTH_JWT_ALGORITHM`, `AUTH_ACCESS_TOKEN_EXPIRE_MINUTES` | Signing secret (required, at least 32 characters), token algorithm, and token lifetime. |
+| `AUTH_COOKIE_NAME`, `AUTH_COOKIE_SECURE`, `AUTH_COOKIE_SAMESITE`, `AUTH_COOKIE_PATH` | HttpOnly authentication cookie settings; staging requires `AUTH_COOKIE_SECURE=true`. |
+| `SATELLITE_MODEL_PATH`, `SATELLITE_SAMPLES_DIR`, `SATELLITE_DEVICE`, `SATELLITE_CONFIDENCE_THRESHOLD`, `SATELLITE_PROVENANCE_PUBLIC_KEY` | Model/runtime paths, device, existing confidence cutoff, and optional trusted Ed25519 public key. |
+| `SMTP_HOST`, `SMTP_PORT`, `SMTP_USERNAME`, `SMTP_PASSWORD`, `SMTP_FROM_EMAIL`, `SMTP_SECURITY`, `SMTP_TIMEOUT_SECONDS` | Optional SMTP transport settings; username and password must be supplied together. |
+| `SMTP_TEST_MODE`, `SMTP_TEST_RECIPIENT` | Test mode must remain enabled in every supported profile. Approved messages are sent only to this explicitly configured recipient and labeled as test messages; organization delivery is disabled. A missing test recipient prevents sending. |
+| `PRIVATE_MEDIA_DIR`, `PRIVATE_MEDIA_MAX_BYTES`, `PRIVATE_MEDIA_MAX_PIXELS` | Private image storage path and upload limits. The path must be a durable, non-public mount in a deployment. |
+| `BACKEND_CORS_ORIGINS` | Explicit JSON list of browser origins; staging requires HTTPS origins. |
+
+### Frontend settings
+
+The frontend accepts only `VITE_API_BASE_URL` (backend origin) and
+`VITE_API_TIMEOUT_MS` (request timeout). See the `.env.*.example` files in
+`frontend/`. Build with Vite's matching mode, for example
+`npm run build -- --mode staging`, after creating `frontend/.env.staging`.
+These public values must not contain credentials or server-side secrets.
+
+See `docs/STAGE_10_STAGING_AND_DEPLOYMENT_REPORT.md` for the verification
+matrix, authentication limitations, database/email safety rules, and deployment
+blockers.
 
 ## MongoDB setup
 
-Install and start MongoDB locally, or provide a managed MongoDB URI through
-`MONGODB_URL`. The application pings MongoDB during startup and fails fast when it
-cannot connect. Startup also creates indexes for observation filters, coordinates,
-hotspot lookup, severity, region, and ocean.
+For local development, use a dedicated local database. For staging, provision a
+separate MongoDB project/cluster, credentials, network policy, and
+`oceanwatch_staging_<unique-suffix>` database; never reuse production credentials
+or point a staging URI at a production cluster. The application pings MongoDB and
+initializes indexes at startup. Staging fails closed if either step fails; the
+development/test profiles remain alive but report not-ready when MongoDB is
+unavailable. `GET /api/health` is a liveness check; `GET /api/ready` also checks
+startup state and MongoDB connectivity.
 
 ## Dataset setup
 
@@ -297,6 +348,24 @@ Interactive Swagger documentation is available at `/docs`. OpenAPI JSON is at
 | Recommendations | GET | `/api/recommendations` |
 | Recommendations | GET | `/api/recommendations/{cluster_id}` |
 | Recommendations | POST | `/api/recommendations/calculate` |
+| Intelligence | GET | `/api/intelligence/trends` |
+| Intelligence | POST | `/api/intelligence/assess` |
+| Intelligence | GET | `/api/intelligence/alerts` |
+| Intelligence | PATCH | `/api/intelligence/alerts/{alert_id}/status` |
+| Intelligence | GET | `/api/intelligence/organizations` |
+| Intelligence | POST | `/api/intelligence/organizations` |
+| Intelligence | PATCH | `/api/intelligence/organizations/{organization_id}/verification` |
+| Intelligence | GET | `/api/intelligence/alerts/{alert_id}/organizations` |
+| Intelligence | POST | `/api/intelligence/alerts/{alert_id}/notifications` |
+| Intelligence | GET | `/api/intelligence/alerts/{alert_id}/notifications` |
+| Intelligence | PATCH | `/api/intelligence/notifications/{notification_id}/acknowledge` |
+
+Intelligence trend and alert assessments use observed NOAA microplastic
+measurements, not forecast values. Risk bands, equal-window length, minimum
+observation count, cell size, and freshness are configurable through the
+`POLLUTION_*` environment variables in `.env.example`. Organization registration,
+verification, notification sending, and acknowledgment require administrator
+authorization. Email is never sent automatically; SMTP configuration is optional.
 
 List endpoints support bounded pagination. Data supports date, region, ocean, and
 concentration filters. Hotspots support severity, region, and ocean filters.
