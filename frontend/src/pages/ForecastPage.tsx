@@ -15,6 +15,7 @@ import { Badge } from '@/components/ui/Badge';
 import { Card, CardBody, CardHeader } from '@/components/ui/Card';
 import { oceanWatchApi, type Forecast, type ForecastMetrics } from '@/lib/api/client';
 import { useDashboardFilters } from '@/lib/dashboardFilters';
+import { forecastableObservationZones } from '@/lib/forecastZones';
 
 const performanceItems = [
   { label: 'MAE', description: 'Mean absolute error' },
@@ -37,13 +38,19 @@ export function ForecastPage() {
     let active = true;
     Promise.all([
       oceanWatchApi.getModelMetrics().catch((requestError: Error) => { if (active) setMetricsError(requestError.message); return null; }),
-      oceanWatchApi.getObservations({ limit: 1000 }).catch(() => null),
+      oceanWatchApi.getAllObservations().catch(() => null),
     ]).then(([modelMetrics, observations]) => {
       if (!active) return;
       if (modelMetrics) setMetrics(modelMetrics);
-      const observationZones = observations?.data.map((observation) => observation.region).filter((value): value is string => Boolean(value)) ?? [];
-      const availableZones = modelMetrics?.zones?.length ? modelMetrics.zones : [...new Set(observationZones)];
+      const observationZones = observations?.data ?? [];
+      const fallbackZones = forecastableObservationZones(observationZones, modelMetrics?.zones ?? []);
+      const availableZones = modelMetrics?.forecastable_zones !== undefined && modelMetrics.forecastable_zones !== null
+        ? modelMetrics.forecastable_zones
+        : fallbackZones;
       setZones(availableZones);
+      if (availableZones.length === 0) {
+        setError('No region currently has six consecutive monthly observations for a forecast.');
+      }
       setLoading(false);
     });
     return () => { active = false; };

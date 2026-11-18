@@ -68,12 +68,19 @@ class ForecastService:
 
     @staticmethod
     async def train(min_periods: int = 6) -> Dict[str, Any]:
-        artifact = train_forecast_model(await ForecastService._load_monthly(), ForecastConfig(min_periods=min_periods))
+        monthly = await ForecastService._load_monthly()
+        artifact = train_forecast_model(monthly, ForecastConfig(min_periods=min_periods))
+        artifact["forecastable_zones"] = [
+            str(zone)
+            for zone, history in monthly[monthly["region"].isin(artifact["zones"])].groupby("region")
+            if len(history) >= 6
+            and history["period"].sort_values().tail(6).dt.to_period("M").astype("int64").diff().dropna().eq(1).all()
+        ]
         MODEL_PATH.parent.mkdir(parents=True, exist_ok=True)
         temporary_path = MODEL_PATH.with_suffix(".joblib.tmp")
         save_artifact(artifact, str(temporary_path))
         temporary_path.replace(MODEL_PATH)
-        return {"status": "success", "message": f"{FORECAST_LABEL} model trained and saved.", "aggregation": artifact["aggregation"], "zones": artifact["zones"], "metrics": artifact["metrics"], "validation_metrics": artifact["validation_metrics"], "selected_params": artifact["selected_params"], "periods": artifact["periods"], "coverage": artifact["coverage"], "train_rows": artifact["train_rows"], "validation_rows": artifact["validation_rows"], "test_rows": artifact["test_rows"]}
+        return {"status": "success", "message": f"{FORECAST_LABEL} model trained and saved.", "aggregation": artifact["aggregation"], "zones": artifact["zones"], "forecastable_zones": artifact["forecastable_zones"], "metrics": artifact["metrics"], "validation_metrics": artifact["validation_metrics"], "selected_params": artifact["selected_params"], "periods": artifact["periods"], "coverage": artifact["coverage"], "train_rows": artifact["train_rows"], "validation_rows": artifact["validation_rows"], "test_rows": artifact["test_rows"]}
 
     @staticmethod
     def get_metrics() -> Dict[str, Any]:
@@ -85,7 +92,7 @@ class ForecastService:
                 "status": "not_trained",
                 "message": "The saved forecast model uses incompatible features. Retrain the model.",
             }
-        return {"status": "ready", "metrics": artifact["metrics"], "validation_metrics": artifact["validation_metrics"], "selected_params": artifact["selected_params"], "periods": artifact["periods"], "coverage": artifact["coverage"], "aggregation": artifact["aggregation"], "zones": artifact["zones"], "train_rows": artifact["train_rows"], "validation_rows": artifact["validation_rows"], "test_rows": artifact["test_rows"], "message": artifact["label"]}
+        return {"status": "ready", "metrics": artifact["metrics"], "validation_metrics": artifact["validation_metrics"], "selected_params": artifact["selected_params"], "periods": artifact["periods"], "coverage": artifact["coverage"], "aggregation": artifact["aggregation"], "zones": artifact["zones"], "forecastable_zones": artifact.get("forecastable_zones"), "train_rows": artifact["train_rows"], "validation_rows": artifact["validation_rows"], "test_rows": artifact["test_rows"], "message": artifact["label"]}
 
     @staticmethod
     async def forecast(zone: str, horizon: int) -> Dict[str, Any]:

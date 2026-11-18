@@ -9,7 +9,7 @@ import {
 } from 'react-leaflet';
 import MarkerClusterGroup from 'react-leaflet-cluster';
 import L from 'leaflet';
-import type { Hotspot, PollutionObservation } from '@/lib/api/client';
+import type { Hotspot, PollutionObservation, SatelliteCatalogItem } from '@/lib/api/client';
 import 'leaflet/dist/leaflet.css';
 import 'leaflet.markercluster/dist/MarkerCluster.css';
 import 'leaflet.markercluster/dist/MarkerCluster.Default.css';
@@ -103,9 +103,11 @@ function calculateKdeGrid(
 function FitMapToData({
   observations,
   hotspots,
+  sites,
 }: {
   observations: PollutionObservation[];
   hotspots: Hotspot[];
+  sites: SatelliteCatalogItem[];
 }) {
   const map = useMap();
 
@@ -117,10 +119,13 @@ function FitMapToData({
       ...hotspots
         .filter((hotspot) => hasValidCoordinates(hotspot.centroid.latitude, hotspot.centroid.longitude))
         .map((hotspot) => [hotspot.centroid.latitude, hotspot.centroid.longitude] as L.LatLngTuple),
+      ...sites
+        .filter((site) => hasValidCoordinates(site.coordinates[0], site.coordinates[1]))
+        .map((site) => [site.coordinates[0], site.coordinates[1]] as L.LatLngTuple),
     ];
     if (points.length === 0) return;
     map.fitBounds(L.latLngBounds(points), { padding: [32, 32], maxZoom: 8 });
-  }, [map, observations, hotspots]);
+  }, [map, observations, hotspots, sites]);
 
   return null;
 }
@@ -137,6 +142,7 @@ function severityColor(severity: string) {
 export function PollutionMap({
   observations,
   hotspots,
+  sites = [],
   selectedHotspotId,
   onSelectHotspot,
   showKde = true,
@@ -144,6 +150,7 @@ export function PollutionMap({
 }: {
   observations: PollutionObservation[];
   hotspots: Hotspot[];
+  sites?: SatelliteCatalogItem[];
   selectedHotspotId: string | null;
   onSelectHotspot: (hotspot: Hotspot) => void;
   showKde?: boolean;
@@ -163,7 +170,7 @@ export function PollutionMap({
         attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
         url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
       />
-      <FitMapToData observations={observations} hotspots={hotspots} />
+      <FitMapToData observations={observations} hotspots={hotspots} sites={sites} />
       {kdeGrid.map((cell, index) => (
         <Rectangle
           key={`kde-${index}`}
@@ -196,6 +203,27 @@ export function PollutionMap({
               </dl>
             </Popup>
           </CircleMarker>
+          ))}
+      </MarkerClusterGroup>
+      <MarkerClusterGroup chunkedLoading showCoverageOnHover={false}>
+        {sites
+          .filter((site) => hasValidCoordinates(site.coordinates[0], site.coordinates[1]))
+          .map((site) => (
+            <CircleMarker
+              key={`site-${site.id}`}
+              center={[site.coordinates[0], site.coordinates[1]]}
+              radius={8}
+              pathOptions={{ color: '#7c3aed', fillColor: '#c4b5fd', fillOpacity: 0.9, weight: 2 }}
+            >
+              <Popup>
+                <strong>{site.name}</strong>
+                <p className="mt-2 max-w-56 text-xs">Registered monitoring location. This marker does not represent a measured pollution value.</p>
+                <dl className="mt-2 grid grid-cols-[auto_auto] gap-x-3 gap-y-1 text-xs">
+                  <dt>Imagery status</dt><dd>{site.validation_status === 'VERIFIED_COMPATIBLE' ? 'Verified input available' : 'Unverified'}</dd>
+                  <dt>Analysis</dt><dd>{site.inference_available ? 'Available' : 'Unavailable'}</dd>
+                </dl>
+              </Popup>
+            </CircleMarker>
           ))}
       </MarkerClusterGroup>
       <MarkerClusterGroup chunkedLoading showCoverageOnHover={false}>

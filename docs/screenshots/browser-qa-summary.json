@@ -1,0 +1,258 @@
+﻿{
+    "loginPath":  "/intelligence",
+    "me":  200,
+    "sessionAfterReload":  200,
+    "pages":  [
+                  {
+                      "path":  "/",
+                      "heading":  "See the ocean clearly. Act with confidence.",
+                      "length":  1750,
+                      "controls":  1,
+                      "links":  8,
+                      "mapCount":  0,
+                      "chartCount":  0,
+                      "overflow":  false,
+                      "visibleStatus":  [
+
+                                        ]
+                  },
+                  {
+                      "path":  "/about",
+                      "heading":  "About OceanWatch",
+                      "length":  1273,
+                      "controls":  1,
+                      "links":  11,
+                      "mapCount":  0,
+                      "chartCount":  0,
+                      "overflow":  false,
+                      "visibleStatus":  [
+
+                                        ]
+                  },
+                  {
+                      "path":  "/models",
+                      "heading":  "Model Insights",
+                      "length":  1079,
+                      "controls":  1,
+                      "links":  11,
+                      "mapCount":  0,
+                      "chartCount":  0,
+                      "overflow":  false,
+                      "visibleStatus":  [
+
+                                        ]
+                  },
+                  {
+                      "path":  "/explore",
+                      "heading":  "Explore Data",
+                      "length":  1281,
+                      "controls":  5,
+                      "links":  13,
+                      "mapCount":  1,
+                      "chartCount":  0,
+                      "overflow":  false,
+                      "visibleStatus":  [
+
+                                        ]
+                  },
+                  {
+                      "path":  "/hotspots",
+                      "heading":  "Marine Pollution Hotspots",
+                      "length":  2332,
+                      "controls":  12,
+                      "links":  13,
+                      "mapCount":  1,
+                      "chartCount":  0,
+                      "overflow":  false,
+                      "visibleStatus":  [
+
+                                        ]
+                  },
+                  {
+                      "path":  "/forecast",
+                      "heading":  "Pollution Forecast",
+                      "length":  2135,
+                      "controls":  18,
+                      "links":  9,
+                      "mapCount":  0,
+                      "chartCount":  0,
+                      "overflow":  false,
+                      "visibleStatus":  [
+
+                                        ]
+                  },
+                  {
+                      "path":  "/priority",
+                      "heading":  "Cleanup Priority Intelligence",
+                      "length":  2730,
+                      "controls":  9,
+                      "links":  9,
+                      "mapCount":  0,
+                      "chartCount":  0,
+                      "overflow":  false,
+                      "visibleStatus":  [
+
+                                        ]
+                  },
+                  {
+                      "path":  "/intelligence",
+                      "heading":  "Ocean Pollution Early Warning Center",
+                      "length":  3977,
+                      "controls":  41,
+                      "links":  11,
+                      "mapCount":  0,
+                      "chartCount":  0,
+                      "overflow":  false,
+                      "visibleStatus":  [
+
+                                        ]
+                  },
+                  {
+                      "path":  "/cleanup",
+                      "heading":  "Cleanup Operations",
+                      "length":  928,
+                      "controls":  6,
+                      "links":  9,
+                      "mapCount":  0,
+                      "chartCount":  0,
+                      "overflow":  false,
+                      "visibleStatus":  [
+
+                                        ]
+                  },
+                  {
+                      "path":  "/reports",
+                      "heading":  "Citizen Pollution Reports",
+                      "length":  954,
+                      "controls":  13,
+                      "links":  9,
+                      "mapCount":  0,
+                      "chartCount":  0,
+                      "overflow":  false,
+                      "visibleStatus":  [
+
+                                        ]
+                  },
+                  {
+                      "path":  "/data",
+                      "heading":  "Data Explorer",
+                      "length":  3642,
+                      "controls":  24,
+                      "links":  9,
+                      "mapCount":  0,
+                      "chartCount":  3,
+                      "overflow":  false,
+                      "visibleStatus":  [
+
+                                        ]
+                  },
+                  {
+                      "path":  "/satellite",
+                      "heading":  "Satellite Debris Analysis",
+                      "length":  1629,
+                      "controls":  14,
+                      "links":  9,
+                      "mapCount":  0,
+                      "chartCount":  0,
+                      "overflow":  false,
+                      "visibleStatus":  [
+
+                                        ]
+                  }
+              ],
+    "modelsMetricsText":  false,
+    "map":  {
+                "badge":  "6867 observations Â· 61 hotspots",
+                "fills":  {
+
+                          },
+                "clusters":  61,
+                "paths":  45,
+                "sitePopupClick":  true,
+                "sitePopup":  "Accra Coast, Ghana\nRegistered monitoring location. This marker does not represent a measured pollution value.\nImagery status\nUnverified\nAnalysis\nUnavailable",
+                "hotspotPopupClick":  true,
+                "hotspotPopup":  "Potential Pollution Hotspot\nHotspot ID\na9a6a901b51a4c58979534dc04c1e321:35\nSeverity\nCRITICAL\nCoordinates\n1.15399, -47.09546\nObservations\n59\nAverage\n2019.017 pieces/m³\nMaximum\n7650.3333 pieces/m³\nRegion\n—\nOcean\nAtlantic Ocean\nDate range\n2018-03-13 to 2023-06-30",
+                "siteMarkerCount":  4
+            },
+    "forecastText":  [
+                         "Forecast Module",
+                         "Forecast",
+                         "Pollution Forecast",
+                         "Review historical pollution patterns and prepare for future concentration estimates from the backend forecasting model.",
+                         "Forecast region",
+                         "Select a trained forecast zone. Date and ocean filters do not affect forecast results.",
+                         "Laccadive Sea",
+                         "FORECAST CONTROLS",
+                         "Forecast horizon",
+                         "Observed and predicted concentration for Laccadive Sea.",
+                         "HISTORICAL PERIOD",
+                         "FORECAST HORIZON",
+                         "This zone is shown with a persistence baseline because the backend did not find sufficient regional XGBoost reliability. The values are not an XGBoost forecast.",
+                         "Forecast summary",
+                         "Latest historical value",
+                         "Forecasted concentration",
+                         "Forecast horizon",
+                         "persistence baseline forecast; XGBoost reliability criteria were not met",
+                         "The forecasting endpoint exposes predictions and evaluation metrics, but does not expose feature-importance values or confidence intervals. Those values are not fabricated here.",
+                         "How the forecast is produced",
+                         "Historical observations",
+                         "Forecast"
+                     ],
+    "responsive":  [
+                       {
+                           "name":  "tablet",
+                           "width":  768,
+                           "documentWidth":  768,
+                           "bodyWidth":  768,
+                           "overflow":  false,
+                           "mapWidth":  0
+                       },
+                       {
+                           "name":  "mobile",
+                           "width":  390,
+                           "documentWidth":  390,
+                           "bodyWidth":  390,
+                           "overflow":  false,
+                           "mapWidth":  300
+                       }
+                   ],
+    "responses":  {
+                      "200 /src/lib/api/client.ts":  10,
+                      "401 /api/auth/me":  2,
+                      "200 /api/auth/login":  1,
+                      "200 /api/auth/me":  33,
+                      "200 /api/data/stats":  4,
+                      "200 /api/hotspots":  10,
+                      "200 /api/data":  79,
+                      "200 /api/intelligence/assess":  4,
+                      "304 /src/lib/api/client.ts":  6,
+                      "200 /api/forecast/model-metrics":  3,
+                      "200 /api/health":  2,
+                      "200 /api/satellite/catalog":  10,
+                      "200 /api/forecast/Laccadive%20Sea":  1,
+                      "200 /api/cleanup/analytics":  2,
+                      "200 /api/intelligence/organizations":  2,
+                      "200 /api/cleanup/operations":  2,
+                      "200 /api/citizen-reports":  2
+                  },
+    "consoleErrors":  [
+                          "Failed to load resource: the server responded with a status of 401 (Unauthorized)",
+                          "Failed to load resource: the server responded with a status of 401 (Unauthorized)",
+                          "Failed to load resource: the server responded with a status of 401 (Unauthorized)",
+                          "Failed to load resource: the server responded with a status of 401 (Unauthorized)",
+                          "Failed to load resource: the server responded with a status of 401 (Unauthorized)",
+                          "Failed to load resource: the server responded with a status of 401 (Unauthorized)",
+                          "Failed to load resource: the server responded with a status of 401 (Unauthorized)",
+                          "Failed to load resource: the server responded with a status of 401 (Unauthorized)",
+                          "Failed to load resource: the server responded with a status of 401 (Unauthorized)"
+                      ],
+    "exceptions":  [
+
+                   ],
+    "httpErrors":  [
+
+                   ],
+    "failedRequests":  [
+
+                       ]
+}

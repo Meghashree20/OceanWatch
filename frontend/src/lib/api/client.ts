@@ -323,6 +323,7 @@ export interface ForecastMetrics {
   message: string | null;
   aggregation: string | null;
   zones: string[] | null;
+  forecastable_zones?: string[] | null;
   train_rows: number | null;
   validation_rows: number | null;
   test_rows: number | null;

@@ -21,7 +21,7 @@ import { SectionHeader } from '@/components/ui/SectionHeader';
 import { DEFAULT_KDE_BANDWIDTH_KM, PollutionMap } from '@/components/PollutionMap';
 import { SharedFilterBar } from '@/components/SharedFilterBar';
 import { cn } from '@/lib/utils';
-import { oceanWatchApi, type Hotspot, type PollutionObservation } from '@/lib/api/client';
+import { oceanWatchApi, type Hotspot, type PollutionObservation, type SatelliteCatalogItem } from '@/lib/api/client';
 import { useDashboardFilters, type DashboardFilters } from '@/lib/dashboardFilters';
 
 /* ------------------------------------------------------------------ */
@@ -79,6 +79,8 @@ export function HotspotsPage() {
   const [clusters, setClusters] = useState<ClusterData[]>([]);
   const [hotspots, setHotspots] = useState<Hotspot[]>([]);
   const [observations, setObservations] = useState<PollutionObservation[]>([]);
+  const [monitoringSites, setMonitoringSites] = useState<SatelliteCatalogItem[]>([]);
+  const [siteCatalogError, setSiteCatalogError] = useState<string | null>(null);
   const [totalClusters, setTotalClusters] = useState(0);
   const [availableRegions, setAvailableRegions] = useState<string[]>([]);
   const [availableOceans, setAvailableOceans] = useState<string[]>([]);
@@ -86,6 +88,14 @@ export function HotspotsPage() {
   const [error, setError] = useState<string | null>(null);
   const [showKde, setShowKde] = useState(true);
   const [kdeBandwidthKm, setKdeBandwidthKm] = useState(DEFAULT_KDE_BANDWIDTH_KM);
+
+  useEffect(() => {
+    let active = true;
+    oceanWatchApi.getSatelliteCatalog()
+      .then((sites) => { if (active) setMonitoringSites(sites); })
+      .catch((requestError: Error) => { if (active) setSiteCatalogError(requestError.message); });
+    return () => { active = false; };
+  }, []);
 
   useEffect(() => {
     let active = true;
@@ -198,6 +208,8 @@ export function HotspotsPage() {
           <RealHotspotMap
             hotspots={hotspots}
             observations={observations}
+            sites={monitoringSites}
+            siteCatalogError={siteCatalogError}
             setFilters={setFilters}
             loading={loading}
             error={error}
@@ -267,6 +279,8 @@ function SummaryStat({
 function RealHotspotMap({
   hotspots,
   observations,
+  sites,
+  siteCatalogError,
   setFilters,
   selectedHotspot,
   onSelectHotspot,
@@ -280,6 +294,8 @@ function RealHotspotMap({
 }: {
   hotspots: Hotspot[];
   observations: PollutionObservation[];
+  sites: SatelliteCatalogItem[];
+  siteCatalogError: string | null;
   setFilters: React.Dispatch<React.SetStateAction<DashboardFilters>>;
   selectedHotspot: Hotspot | null;
   onSelectHotspot: (hotspot: Hotspot | null) => void;
@@ -324,7 +340,7 @@ function RealHotspotMap({
           <div className="flex min-h-[30rem] items-center justify-center bg-ocean-50 text-sm text-ocean-500">Loading geographic data…</div>
         ) : error ? (
           <div className="flex min-h-[30rem] items-center justify-center bg-ocean-50 px-6 text-center text-sm text-red-700">{error}</div>
-        ) : observations.length === 0 && hotspots.length === 0 ? (
+        ) : observations.length === 0 && hotspots.length === 0 && sites.length === 0 ? (
           <div className="flex min-h-[30rem] flex-col items-center justify-center bg-ocean-50 px-6 text-center">
             <MapPin className="h-8 w-8 text-ocean-300" />
             <p className="mt-3 text-sm font-semibold text-navy-800">No geographic data available</p>
@@ -334,6 +350,7 @@ function RealHotspotMap({
           <PollutionMap
             observations={observations}
             hotspots={hotspots}
+            sites={sites}
             showKde={showKde}
             kdeBandwidthKm={kdeBandwidthKm}
             selectedHotspotId={selectedHotspot ? String(selectedHotspot.cluster_id) : null}
@@ -343,6 +360,11 @@ function RealHotspotMap({
               if (region) setFilters((current) => ({ ...current, region }));
             }}
           />
+        )}
+        {!loading && !error && siteCatalogError && (
+          <p className="border-t border-ocean-100 px-4 py-3 text-xs text-amber-700">
+            Registered monitoring locations could not be loaded: {siteCatalogError}
+          </p>
         )}
         {!loading && !error && showKde && !kdeAvailable && (
           <p className="border-t border-ocean-100 bg-ocean-50 px-4 py-2 text-xs text-ocean-500">
@@ -489,10 +511,9 @@ function DetailRow({
 
 function MapLegend({ showKde }: { showKde: boolean }) {
   const items = [
-    { label: 'Core point', description: 'Dense observation within a cluster', dot: 'bg-cyan-400 border-navy-950' },
-    { label: 'Border point', description: 'Edge of a cluster boundary', dot: 'bg-teal-400 border-navy-950' },
-    { label: 'Noise point', description: 'Outlier — not assigned to any cluster', dot: 'bg-ocean-400/50 border-ocean-500' },
-    { label: 'DBSCAN hotspot', description: 'Potential pollution cluster', dot: 'border-cyan-400 bg-cyan-100/40' },
+    { label: 'Observation', description: 'Measured NOAA sample location', dot: 'bg-cyan-400 border-navy-950' },
+    { label: 'Registered site', description: 'Catalog location; no value implied', dot: 'bg-violet-300 border-violet-700' },
+    { label: 'DBSCAN hotspot', description: 'Cluster from stored observations', dot: 'border-cyan-400 bg-cyan-100/40' },
     ...(showKde ? [{ label: 'KDE density', description: 'Relative observation density estimate', dot: 'border-orange-400 bg-orange-400/50' }] : []),
   ];
 

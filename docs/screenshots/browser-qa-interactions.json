@@ -1,0 +1,334 @@
+{
+  "email": "oceanwatch.qa.final.1794927048760@example.com",
+  "interactions": [
+    {
+      "route": "/explore",
+      "controls": {
+        "route": "/login",
+        "selects": [],
+        "inputs": [
+          {
+            "i": 0,
+            "type": "email",
+            "value": "",
+            "disabled": false
+          },
+          {
+            "i": 1,
+            "type": "password",
+            "value": "",
+            "disabled": false
+          }
+        ],
+        "buttons": [
+          {
+            "i": 0,
+            "text": "",
+            "aria": "Show password",
+            "disabled": false
+          },
+          {
+            "i": 1,
+            "text": "Sign in",
+            "aria": null,
+            "disabled": false
+          }
+        ]
+      },
+      "selectChanges": []
+    },
+    {
+      "route": "/hotspots",
+      "controls": {
+        "route": "/login",
+        "selects": [],
+        "inputs": [
+          {
+            "i": 0,
+            "type": "email",
+            "value": "",
+            "disabled": false
+          },
+          {
+            "i": 1,
+            "type": "password",
+            "value": "",
+            "disabled": false
+          }
+        ],
+        "buttons": [
+          {
+            "i": 0,
+            "text": "",
+            "aria": "Show password",
+            "disabled": false
+          },
+          {
+            "i": 1,
+            "text": "Sign in",
+            "aria": null,
+            "disabled": false
+          }
+        ]
+      },
+      "selectChanges": []
+    },
+    {
+      "route": "/forecast",
+      "controls": {
+        "route": "/login",
+        "selects": [],
+        "inputs": [
+          {
+            "i": 0,
+            "type": "email",
+            "value": "",
+            "disabled": false
+          },
+          {
+            "i": 1,
+            "type": "password",
+            "value": "",
+            "disabled": false
+          }
+        ],
+        "buttons": [
+          {
+            "i": 0,
+            "text": "",
+            "aria": "Show password",
+            "disabled": false
+          },
+          {
+            "i": 1,
+            "text": "Sign in",
+            "aria": null,
+            "disabled": false
+          }
+        ]
+      },
+      "selectChanges": []
+    },
+    {
+      "route": "/priority",
+      "controls": {
+        "route": "/login",
+        "selects": [],
+        "inputs": [
+          {
+            "i": 0,
+            "type": "email",
+            "value": "",
+            "disabled": false
+          },
+          {
+            "i": 1,
+            "type": "password",
+            "value": "",
+            "disabled": false
+          }
+        ],
+        "buttons": [
+          {
+            "i": 0,
+            "text": "",
+            "aria": "Show password",
+            "disabled": false
+          },
+          {
+            "i": 1,
+            "text": "Sign in",
+            "aria": null,
+            "disabled": false
+          }
+        ]
+      },
+      "selectChanges": []
+    },
+    {
+      "route": "/intelligence",
+      "controls": {
+        "route": "/login",
+        "selects": [],
+        "inputs": [
+          {
+            "i": 0,
+            "type": "email",
+            "value": "",
+            "disabled": false
+          },
+          {
+            "i": 1,
+            "type": "password",
+            "value": "",
+            "disabled": false
+          }
+        ],
+        "buttons": [
+          {
+            "i": 0,
+            "text": "",
+            "aria": "Show password",
+            "disabled": false
+          },
+          {
+            "i": 1,
+            "text": "Sign in",
+            "aria": null,
+            "disabled": false
+          }
+        ]
+      },
+      "selectChanges": []
+    },
+    {
+      "route": "/cleanup",
+      "controls": {
+        "route": "/login",
+        "selects": [],
+        "inputs": [
+          {
+            "i": 0,
+            "type": "email",
+            "value": "",
+            "disabled": false
+          },
+          {
+            "i": 1,
+            "type": "password",
+            "value": "",
+            "disabled": false
+          }
+        ],
+        "buttons": [
+          {
+            "i": 0,
+            "text": "",
+            "aria": "Show password",
+            "disabled": false
+          },
+          {
+            "i": 1,
+            "text": "Sign in",
+            "aria": null,
+            "disabled": false
+          }
+        ]
+      },
+      "selectChanges": []
+    },
+    {
+      "route": "/reports",
+      "controls": {
+        "route": "/login",
+        "selects": [],
+        "inputs": [
+          {
+            "i": 0,
+            "type": "email",
+            "value": "",
+            "disabled": false
+          },
+          {
+            "i": 1,
+            "type": "password",
+            "value": "",
+            "disabled": false
+          }
+        ],
+        "buttons": [
+          {
+            "i": 0,
+            "text": "",
+            "aria": "Show password",
+            "disabled": false
+          },
+          {
+            "i": 1,
+            "text": "Sign in",
+            "aria": null,
+            "disabled": false
+          }
+        ]
+      },
+      "selectChanges": []
+    },
+    {
+      "route": "/data",
+      "controls": {
+        "route": "/login",
+        "selects": [],
+        "inputs": [
+          {
+            "i": 0,
+            "type": "email",
+            "value": "",
+            "disabled": false
+          },
+          {
+            "i": 1,
+            "type": "password",
+            "value": "",
+            "disabled": false
+          }
+        ],
+        "buttons": [
+          {
+            "i": 0,
+            "text": "",
+            "aria": "Show password",
+            "disabled": false
+          },
+          {
+            "i": 1,
+            "text": "Sign in",
+            "aria": null,
+            "disabled": false
+          }
+        ]
+      },
+      "selectChanges": []
+    },
+    {
+      "route": "/satellite",
+      "controls": {
+        "route": "/login",
+        "selects": [],
+        "inputs": [
+          {
+            "i": 0,
+            "type": "email",
+            "value": "",
+            "disabled": false
+          },
+          {
+            "i": 1,
+            "type": "password",
+            "value": "",
+            "disabled": false
+          }
+        ],
+        "buttons": [
+          {
+            "i": 0,
+            "text": "",
+            "aria": "Show password",
+            "disabled": false
+          },
+          {
+            "i": 1,
+            "text": "Sign in",
+            "aria": null,
+            "disabled": false
+          }
+        ]
+      },
+      "selectChanges": []
+    }
+  ],
+  "map": {
+    "siteMarkers": 0,
+    "hotspotMarkers": 0
+  },
+  "logoutMe": 401
+}

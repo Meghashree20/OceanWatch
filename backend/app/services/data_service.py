@@ -1,4 +1,4 @@
-import pandas as pd
+﻿import pandas as pd
 import math
 from typing import Dict, Any, List, Optional
 from datetime import datetime
@@ -150,3 +150,4 @@ class DataService:
         collection = db_client.db["pollution_observations"]
         total = await collection.count_documents({})
         return {"total_observations": total}
+

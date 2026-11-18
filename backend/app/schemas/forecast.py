@@ -12,6 +12,7 @@ class ForecastTrainResponse(BaseModel):
     message: str
     aggregation: str
     zones: List[str]
+    forecastable_zones: List[str] = Field(default_factory=list)
     metrics: Dict[str, Any]
     validation_metrics: Optional[Dict[str, Any]] = None
     selected_params: Optional[Dict[str, Any]] = None
@@ -42,6 +43,7 @@ class ForecastMetricsResponse(BaseModel):
     message: Optional[str] = None
     aggregation: Optional[str] = None
     zones: Optional[List[str]] = None
+    forecastable_zones: Optional[List[str]] = None
     train_rows: Optional[int] = None
     validation_rows: Optional[int] = None
     test_rows: Optional[int] = None
